@@ -35,6 +35,10 @@
 
 #include <asm/kvm_host.h>
 
+/* OSNET */
+#include <asm/osnet.h>
+/* OSENET-END */
+
 #ifndef KVM_MAX_VCPU_ID
 #define KVM_MAX_VCPU_ID KVM_MAX_VCPUS
 #endif
@@ -265,6 +269,10 @@ struct kvm_vcpu {
 	bool preempted;
 	struct kvm_vcpu_arch arch;
 	struct dentry *debugfs_dentry;
+
+#if OSNET_DTID_DEVELOP
+  bool osnet_update_apic_timer;
+#endif
 };
 
 static inline int kvm_vcpu_exiting_guest_mode(struct kvm_vcpu *vcpu)

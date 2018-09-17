@@ -20,6 +20,10 @@
 
 #include "tick-internal.h"
 
+/* OSNET */
+#include <asm/osnet.h>
+/* OSNET-END */
+
 /* The registered clock event devices */
 static LIST_HEAD(clockevent_devices);
 static LIST_HEAD(clockevents_released);
@@ -337,6 +341,11 @@ int clockevents_program_event(struct clock_event_device *dev, ktime_t expires,
 
 	clc = ((unsigned long long) delta * dev->mult) >> dev->shift;
 	rc = dev->set_next_event((unsigned long) clc, dev);
+
+#if OSNET_TRACE_PRINTK
+  if (smp_processor_id() == 1)
+    trace_printk("%s\t0x%llx\t%llu\t%d\t%d\n", dev->name, clc, delta, dev->mult, dev->shift);
+#endif
 
 	return (rc && force) ? clockevents_program_min_delta(dev) : rc;
 }

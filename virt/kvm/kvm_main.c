@@ -63,6 +63,15 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/kvm.h>
 
+/* OSNET */
+#include <asm/osnet.h>
+/* OSNET-END */
+
+#if OSNET_DTID_LAPIC
+extern struct kvm_x86_ops *kvm_x86_ops_in_lapic;
+extern struct kvm *kvm_in_lapic;
+#endif
+
 /* Worst case buffer size needed for holding an integer. */
 #define ITOA_MAX_LEN 12
 
@@ -716,6 +725,13 @@ static void kvm_destroy_vm(struct kvm *kvm)
 {
 	int i;
 	struct mm_struct *mm = kvm->mm;
+
+#if OSNET_DTID_LAPIC
+  if (kvm_in_lapic) {
+    kvm_in_lapic = NULL;
+    printk(KERN_INFO "Unlink the VM between the KVM and LAPIC.\n");
+  }
+#endif
 
 	kvm_destroy_vm_debugfs(kvm);
 	kvm_arch_sync_events(kvm);
@@ -1495,7 +1511,7 @@ static int hva_to_pfn_remapped(struct vm_area_struct *vma,
 	 * Whoever called remap_pfn_range is also going to call e.g.
 	 * unmap_mapping_range before the underlying pages are freed,
 	 * causing a call to our MMU notifier.
-	 */ 
+	 */
 	kvm_get_pfn(pfn);
 
 	*p_pfn = pfn;
@@ -2458,6 +2474,10 @@ static int kvm_vm_ioctl_create_vcpu(struct kvm *kvm, u32 id)
 		r = PTR_ERR(vcpu);
 		goto vcpu_decrement;
 	}
+  
+#if OSNET_DTID_DEVELOP
+  vcpu->osnet_update_apic_timer = false;
+#endif
 
 	preempt_notifier_init(&vcpu->preempt_notifier, &kvm_preempt_ops);
 
@@ -2496,6 +2516,7 @@ static int kvm_vm_ioctl_create_vcpu(struct kvm *kvm, u32 id)
 
 	mutex_unlock(&kvm->lock);
 	kvm_arch_vcpu_postcreate(vcpu);
+
 	return r;
 
 unlock_vcpu_destroy:
@@ -3198,6 +3219,11 @@ static int kvm_dev_ioctl_create_vm(unsigned long type)
 	}
 
 	fd_install(r, file);
+
+#if OSNET_DTID_LAPIC
+  kvm_in_lapic = kvm;
+#endif
+
 	return r;
 }
 
@@ -3916,6 +3942,10 @@ int kvm_init(void *opaque, unsigned vcpu_size, unsigned vcpu_align,
 	if (r)
 		goto out_fail;
 
+#if OSNET_DTID_LAPIC
+  kvm_x86_ops_in_lapic = (struct kvm_x86_ops *) opaque;
+#endif
+
 	/*
 	 * kvm_arch_init makes sure there's at most one caller
 	 * for architectures that support multiple implementations,
@@ -4016,6 +4046,11 @@ EXPORT_SYMBOL_GPL(kvm_init);
 
 void kvm_exit(void)
 {
+#if OSNET_DTID_LAPIC
+  kvm_x86_ops_in_lapic = NULL;
+  printk(KERN_INFO "Unlink the KVM ops between the KVM and LAPIC.\n");
+#endif
+
 	debugfs_remove_recursive(kvm_debugfs_dir);
 	misc_deregister(&kvm_dev);
 	kmem_cache_destroy(kvm_vcpu_cache);

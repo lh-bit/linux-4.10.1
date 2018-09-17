@@ -35,6 +35,10 @@
 #include <asm/asm.h>
 #include <asm/kvm_page_track.h>
 
+/* OSNET */
+#include <asm/osnet.h>
+/* OSNET-END*/
+
 #define KVM_MAX_VCPUS 288
 #define KVM_SOFT_MAX_VCPUS 240
 #define KVM_MAX_VCPU_ID 1023
@@ -1030,6 +1034,10 @@ struct kvm_x86_ops {
 	void (*cancel_hv_timer)(struct kvm_vcpu *vcpu);
 
 	void (*setup_mce)(struct kvm_vcpu *vcpu);
+
+#if OSNET_DTID
+  void (*osnet_set_pir)(struct kvm_vcpu *vcpu, int vector);
+#endif
 };
 
 struct kvm_arch_async_pf {
