@@ -55,6 +55,10 @@
 #include <asm/tsc.h>
 #include <asm/hypervisor.h>
 
+/* OSNET */
+#include <asm/osnet.h>
+/* OSNET-END */
+
 unsigned int num_processors;
 
 unsigned disabled_cpus;
@@ -461,9 +465,20 @@ EXPORT_SYMBOL_GPL(setup_APIC_eilvt);
 /*
  * Program the next event, relative to now
  */
+#if OSNET_HYPERCALL
+#include <asm/kvm_para.h>
+bool osnet_enable_hypercall = false;
+EXPORT_SYMBOL_GPL(osnet_enable_hypercall);
+#endif
+
 static int lapic_next_event(unsigned long delta,
 			    struct clock_event_device *evt)
 {
+#if OSNET_HYPERCALL
+  if (osnet_enable_hypercall) {
+    kvm_hypercall0(KVM_HC_SET_PIR_ON);
+  }
+#endif
 	apic_write(APIC_TMICT, delta);
 	return 0;
 }
