@@ -270,7 +270,7 @@ struct kvm_vcpu {
 	struct kvm_vcpu_arch arch;
 	struct dentry *debugfs_dentry;
 
-#if OSNET_DTID_DEVELOP
+#if OSNET_DTID_WRMSR
   bool osnet_update_apic_timer;
 #endif
 };

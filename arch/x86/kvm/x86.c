@@ -106,17 +106,26 @@ EXPORT_SYMBOL_GPL(kvm_x86_ops);
 #include <asm/osnet.h>
 /* OSNET-END */
 
-#if OSNET_DTID_DEVELOP
+#if OSNET_DTID_WRMSR
 extern bool osnet_emulated_timer;
-extern bool osnet_update_apic_timer;
-
-static bool __read_mostly osnet_enable_emulated_timer = 0;
+static bool __read_mostly osnet_enable_emulated_timer = false;
 module_param_named(osnet_enable_emulated_timer ,
                    osnet_enable_emulated_timer ,
                    bool,
                    0644);
 MODULE_PARM_DESC(osnet_enable_emulated_timer ,
                  "By default, OSNET timer emulation is disabled.");
+#endif
+
+#if OSNET_DTID_SYNC_PIR_VIRR
+extern bool osnet_sync_pir_virr;
+static bool __read_mostly osnet_enable_sync_pir_virr = false;
+module_param_named(osnet_enable_sync_pir_virr ,
+                   osnet_enable_sync_pir_virr ,
+                   bool,
+                   0644);
+MODULE_PARM_DESC(osnet_enable_sync_pir_virr ,
+                 "By default, OSNET does not help syncing PIR to vIRR.");
 #endif
 
 static bool __read_mostly ignore_msrs = 0;
@@ -2170,7 +2179,7 @@ int kvm_set_msr_common(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
   case MSR_IA32_APICBASE:
     return kvm_set_apic_base(vcpu, msr_info);
   case APIC_BASE_MSR ... APIC_BASE_MSR + 0x3ff:
-#if OSNET_DTID_DEVELOP
+#if OSNET_DTID_WRMSR
     osnet_emulated_timer = osnet_enable_emulated_timer;
 #endif
     return kvm_x2apic_msr_write(vcpu, msr, data);
@@ -6171,6 +6180,19 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
     kvm_pv_kick_cpu_op(vcpu->kvm, a0, a1);
     ret = 0;
     break;
+#if OSNET_DTID_HYPERCALL
+  case KVM_HC_SET_PIR_ON:
+    if (osnet_enable_sync_pir_virr) {
+      osnet_sync_pir_virr = osnet_enable_sync_pir_virr;
+      kvm_x86_ops->osnet_set_pir_on(vcpu, 0xef);
+      trace_printk("Guest has called to syn PIR to vIRR from CPU%u\n",
+                   smp_processor_id());
+    }
+    else
+      trace_printk("Guest has called from CPU%u\n",
+                   smp_processor_id());
+    break;
+#endif
   default:
     ret = -KVM_ENOSYS;
     break;
@@ -6632,7 +6654,7 @@ void kvm_arch_mmu_notifier_invalidate_page(struct kvm *kvm,
     kvm_make_all_cpus_request(kvm, KVM_REQ_APIC_PAGE_RELOAD);
 }
 
-#if OSNET_DTID_DEVELOP
+#if OSNET_DTID_WRMSR
 /* XXX: Need to dynamically determin mult, shift and min delta(ns). */
 /* Assume the guest uses the one-shot or periodic timer. */
 #ifndef APIC_BUS_CYCLE_NS
@@ -6879,7 +6901,7 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
     vcpu->arch.switch_db_regs &= ~KVM_DEBUGREG_RELOAD;
   }
 
-#if OSNET_DTID_DEVELOP
+#if OSNET_DTID_WRMSR
   if (vcpu->osnet_update_apic_timer) {
     osnet_lapic_emulate_timer(vcpu);
     vcpu->osnet_update_apic_timer = false;

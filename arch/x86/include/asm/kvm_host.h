@@ -1036,7 +1036,7 @@ struct kvm_x86_ops {
 	void (*setup_mce)(struct kvm_vcpu *vcpu);
 
 #if OSNET_DTID
-  void (*osnet_set_pir)(struct kvm_vcpu *vcpu, int vector);
+  void (*osnet_set_pir_on)(struct kvm_vcpu *vcpu, int vector);
 #endif
 };
 

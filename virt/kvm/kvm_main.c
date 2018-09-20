@@ -2475,7 +2475,7 @@ static int kvm_vm_ioctl_create_vcpu(struct kvm *kvm, u32 id)
 		goto vcpu_decrement;
 	}
   
-#if OSNET_DTID_DEVELOP
+#if OSNET_DTID_WRMSR
   vcpu->osnet_update_apic_timer = false;
 #endif
 

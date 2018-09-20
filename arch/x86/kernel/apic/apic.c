@@ -959,7 +959,7 @@ static void local_apic_timer_interrupt(void)
     for (i = 0; i < KVM_MAX_VCPUS; i++) {
       struct kvm_vcpu *vcpu = kvm_in_lapic->vcpus[i];
       if (vcpu) {
-        kvm_x86_ops_in_lapic->osnet_set_pir(vcpu, 0xef);
+        kvm_x86_ops_in_lapic->osnet_set_pir_on(vcpu, 0xef);
       }
       else
         trace_printk("vCPU is not found.\n");

@@ -75,12 +75,12 @@ MODULE_PARM_DESC(osnet_enable_hlt_exiting,
 #endif
 
 #if OSNET_DTID
-static bool __read_mostly osnet_enable_set_pir = 0;
-module_param_named(osnet_enable_set_pir,
-                   osnet_enable_set_pir,
+static bool __read_mostly osnet_enable_set_pir_on = 0;
+module_param_named(osnet_enable_set_pir_on,
+                   osnet_enable_set_pir_on,
                    bool,
                    0644);
-MODULE_PARM_DESC(osnet_enable_set_pir,
+MODULE_PARM_DESC(osnet_enable_set_pir_on,
                  "By default, Setting PIR is disabled.");
 #endif
 
@@ -4991,7 +4991,7 @@ static void vmx_disable_intercept_for_msr(u32 msr, bool longmode_only)
             msr, MSR_TYPE_R | MSR_TYPE_W);
 }
 
-#if OSNET_DTID_LAPIC
+#if OSNET_DTID_INTERCEPT_MSR
 void vmx_disable_intercept_msr_x2apic(u32 msr, int type, bool apicv_active)
 #else
 static void vmx_disable_intercept_msr_x2apic(u32 msr, int type, bool apicv_active)
@@ -5009,11 +5009,11 @@ static void vmx_disable_intercept_msr_x2apic(u32 msr, int type, bool apicv_activ
         msr, type);
   }
 }
-#if OSNET_DTID_LAPIC
+#if OSNET_DTID_INTERCEPT_MSR
 EXPORT_SYMBOL_GPL(vmx_disable_intercept_msr_x2apic);
 #endif
 
-#if OSNET_DTID_LAPIC
+#if OSNET_DTID_INTERCEPT_MSR
 static void __osnet_vmx_enable_intercept_for_msr(
   unsigned long *msr_bitmap,
   u32 msr,
@@ -5185,9 +5185,9 @@ static void vmx_deliver_posted_interrupt(struct kvm_vcpu *vcpu, int vector)
  * be different. Currently, the timer interrupt is 0xEF.
  */
 #if OSNET_DTID
-static void osnet_vmx_set_pir(struct kvm_vcpu *vcpu, int vector) {
+static void osnet_vmx_set_pir_on(struct kvm_vcpu *vcpu, int vector) {
   struct vcpu_vmx *vmx = to_vmx(vcpu);
-  if (osnet_enable_set_pir) {
+  if (osnet_enable_set_pir_on) {
     int was_set = 0;
     was_set = pi_test_and_set_pir(vector, &vmx->pi_desc);
     if (was_set) {
@@ -11769,7 +11769,7 @@ static struct kvm_x86_ops vmx_x86_ops __ro_after_init = {
   .update_pi_irte = vmx_update_pi_irte,
 
 #if OSNET_DTID
-  .osnet_set_pir = osnet_vmx_set_pir,
+  .osnet_set_pir_on = osnet_vmx_set_pir_on,
 #endif
 
 #ifdef CONFIG_X86_64

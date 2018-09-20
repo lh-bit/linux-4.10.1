@@ -1,4 +1,3 @@
-
 /*
  * Local APIC virtualization
  *
@@ -47,11 +46,15 @@
 #include <asm/osnet.h>
 /* OSNET-END */
 
-#if OSNET_DTID_DEVELOP
+#if OSNET_DTID_WRMSR
 bool osnet_emulated_timer = false;
 EXPORT_SYMBOL_GPL(osnet_emulated_timer);
 #endif
 
+#if OSNET_DTID_SYNC_PIR_VIRR
+bool osnet_sync_pir_virr = false;
+EXPORT_SYMBOL_GPL(osnet_sync_pir_virr);
+#endif
 
 #ifndef CONFIG_X86_64
 #define mod_64(x, y) ((x) - (y) * div64_u64(x, y))
@@ -361,9 +364,11 @@ void __kvm_apic_update_irr(u32 *pir, void *regs)
 }
 EXPORT_SYMBOL_GPL(__kvm_apic_update_irr);
 
-#if OSNET_DTID_DEVELOP
-/* The guest timer interrupt handler is invoked ONLY when PIN
- * is fired. The guest timer interrupt vector is 0xEF or 239.
+#if OSNET_DTID_SYNC_PIR_VIRR
+/* We do not want to sync the timer-interrupt bit of PIR upon
+ * every VM entry. Otherwise, the guest needs to handle the
+ * virtual timer interrupt due to its high priority and
+ * results in a hanging guest.
  */
 static void __osnet_kvm_apic_update_irr(u32 *pir, void *regs) {
   u32 i, pir_val;
@@ -397,8 +402,8 @@ void kvm_apic_update_irr(struct kvm_vcpu *vcpu, u32 *pir)
 {
   struct kvm_lapic *apic = vcpu->arch.apic;
 
-#if OSNET_DTID_DEVELOP
-  if (osnet_emulated_timer)
+#if OSNET_DTID_SYNC_PIR_VIRR
+  if (osnet_sync_pir_virr)
     __osnet_kvm_apic_update_irr(pir, apic->regs);
   else
     __kvm_apic_update_irr(pir, apic->regs);
@@ -1592,7 +1597,7 @@ static void apic_manage_nmi_watchdog(struct kvm_lapic *apic, u32 lvt0_val)
 
 int kvm_lapic_reg_write(struct kvm_lapic *apic, u32 reg, u32 val)
 {
-#if OSNET_DTID_DEVELOP
+#if OSNET_DTID_WRMSR
   struct kvm_vcpu *vcpu = apic->vcpu;
 #endif
 
@@ -1691,12 +1696,12 @@ int kvm_lapic_reg_write(struct kvm_lapic *apic, u32 reg, u32 val)
     if (apic_lvtt_tscdeadline(apic))
       break;
 
-#if OSNET_DTID_DEVELOP
+#if OSNET_DTID_WRMSR
     hrtimer_cancel(&apic->lapic_timer.timer);
     kvm_lapic_set_reg(apic, APIC_TMICT, val);
     if (osnet_emulated_timer) {
       vcpu->osnet_update_apic_timer = true;
-      kvm_x86_ops->osnet_set_pir(vcpu, 0xef);
+      kvm_x86_ops->osnet_set_pir_on(vcpu, 0xef);
     }
     else
       start_apic_timer(apic);

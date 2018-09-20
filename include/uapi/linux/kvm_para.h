@@ -24,6 +24,13 @@
 #define KVM_HC_MIPS_EXIT_VM		7
 #define KVM_HC_MIPS_CONSOLE_OUTPUT	8
 
+/* OSNET-DTID */
+#include <asm/osnet.h>
+#if OSNET_DTID_HYPERCALL
+#define KVM_HC_SET_PIR_ON 9
+#endif
+/* OSNET-END */
+
 /*
  * hypercalls use architecture specific
  */
