@@ -68,6 +68,10 @@
 /* OSNET-END */
 
 #if OSNET_DTID_LAPIC
+/* LAPIC timer-interrupt handler is able to set up the PIR
+ * timer-interrupt bit and ON bit, when the LAPIC timer of
+ * host core fires and invoke the IRQ.
+ */
 extern struct kvm_x86_ops *kvm_x86_ops_in_lapic;
 extern struct kvm *kvm_in_lapic;
 #endif
@@ -727,9 +731,15 @@ static void kvm_destroy_vm(struct kvm *kvm)
 	struct mm_struct *mm = kvm->mm;
 
 #if OSNET_DTID_LAPIC
-  if (kvm_in_lapic) {
+  /* When the guest is destroyed, unlink the KVM from the
+   * LAPIC timer-interrupt handler.
+   */
+  if (kvm_in_lapic)
+  {
     kvm_in_lapic = NULL;
-    printk(KERN_INFO "Unlink the VM between the KVM and LAPIC.\n");
+#if OSNET_TRACE_DTID_LAPIC
+    trace_printk("Unlink the KVM from the LAPIC timer-interrupt handler.\n");
+#endif
   }
 #endif
 
@@ -2476,6 +2486,9 @@ static int kvm_vm_ioctl_create_vcpu(struct kvm *kvm, u32 id)
 	}
   
 #if OSNET_DTID_WRMSR
+  /* Update the LAPIC timer for the guest upon the guest's
+   * WRMSR TMICT.
+   */
   vcpu->osnet_update_apic_timer = false;
 #endif
 
@@ -3221,6 +3234,9 @@ static int kvm_dev_ioctl_create_vm(unsigned long type)
 	fd_install(r, file);
 
 #if OSNET_DTID_LAPIC
+  /* LAPIC timer-interrupt handler is able to retrieve the
+   * vCPUs from the KVM instance.
+   */
   kvm_in_lapic = kvm;
 #endif
 
@@ -3943,6 +3959,9 @@ int kvm_init(void *opaque, unsigned vcpu_size, unsigned vcpu_align,
 		goto out_fail;
 
 #if OSNET_DTID_LAPIC
+  /* LAPIC timer-interrupt handler is able to set the PIR
+   * timer-interrupt bit and ON bit.
+   */
   kvm_x86_ops_in_lapic = (struct kvm_x86_ops *) opaque;
 #endif
 
@@ -4047,8 +4066,13 @@ EXPORT_SYMBOL_GPL(kvm_init);
 void kvm_exit(void)
 {
 #if OSNET_DTID_LAPIC
+  /* When KVM instance is terminated, unlink the KVM
+   * operations from the LAPIC timer.
+   */
   kvm_x86_ops_in_lapic = NULL;
-  printk(KERN_INFO "Unlink the KVM ops between the KVM and LAPIC.\n");
+#if OSNET_TRACE_DTID_LAPIC
+  trace_printk("Unlink the KVM ops from LAPIC timer-interrupt handler.\n");
+#endif
 #endif
 
 	debugfs_remove_recursive(kvm_debugfs_dir);

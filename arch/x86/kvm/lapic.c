@@ -47,11 +47,18 @@
 /* OSNET-END */
 
 #if OSNET_DTID_WRMSR
+/*  Enable the KVM to update the LAPIC timer for the guest
+ *  before the VM entry and set the PIR timer-interrupt bit
+ *  and ON bit.
+ */
 bool osnet_emulated_timer = false;
 EXPORT_SYMBOL_GPL(osnet_emulated_timer);
 #endif
 
 #if OSNET_DTID_SYNC_PIR_VIRR
+/* Sync the every bit except the timer-interrupt bit from the
+ * PIR to vIRR upon the next VM entry.
+ */
 bool osnet_sync_pir_virr = false;
 EXPORT_SYMBOL_GPL(osnet_sync_pir_virr);
 #endif
@@ -365,31 +372,37 @@ void __kvm_apic_update_irr(u32 *pir, void *regs)
 EXPORT_SYMBOL_GPL(__kvm_apic_update_irr);
 
 #if OSNET_DTID_SYNC_PIR_VIRR
-/* We do not want to sync the timer-interrupt bit of PIR upon
- * every VM entry. Otherwise, the guest needs to handle the
- * virtual timer interrupt due to its high priority and
- * results in a hanging guest.
+/* We do not want to sync the timer-interrupt bit from the PIR
+ * to vIRR upon every VM entry. Otherwise, the guest needs to
+ * handle the virtual timer interrupt due to its high priority
+ * and results in a hanging guest. When the PIN arrives the
+ * LAPIC, the logical processor syncs the timer-interrupt bit.
  */
-static void __osnet_kvm_apic_update_irr(u32 *pir, void *regs) {
+static void __osnet_kvm_apic_update_irr(u32 *pir, void *regs)
+{
   u32 i, pir_val;
   u32 timer_bit;
 
-  for (i = 0; i <= 6; i++) {
+  for (i = 0; i <= 6; i++)
+  {
     pir_val = READ_ONCE(pir[i]);
-    if (pir_val) {
+    if (pir_val)
+    {
       pir_val = xchg(&pir[i], 0);
       *((u32 *)(regs + APIC_IRR + i * 0x10)) |= pir_val;
     }
   }
 
-  /* Sync other bits from pir[7] to vIRR except the timer
-   * interrupt.
+  /* Sync other bits from pir[7] to vIRR except the
+   * timer-interrupt bit.
    */
   pir_val = READ_ONCE(pir[7]);
-  if (pir_val) {
+  if (pir_val)
+  {
     pir_val = xchg(&pir[7], 0);
     timer_bit = 1 << (0xef % 32);
-    if (pir_val & timer_bit) {
+    if (pir_val & timer_bit)
+    {
       pir[7] = pir[7] ^ timer_bit;
       pir_val = pir_val ^ timer_bit;
     }
@@ -403,6 +416,9 @@ void kvm_apic_update_irr(struct kvm_vcpu *vcpu, u32 *pir)
   struct kvm_lapic *apic = vcpu->arch.apic;
 
 #if OSNET_DTID_SYNC_PIR_VIRR
+  /* Sync the every bit except the timer-interrupt bit from
+   * the PIR upon the next VM entry.
+   */
   if (osnet_sync_pir_virr)
     __osnet_kvm_apic_update_irr(pir, apic->regs);
   else
@@ -1465,7 +1481,7 @@ static bool set_target_expiration(struct kvm_lapic *apic)
     nsec_to_cycles(apic->vcpu, apic->lapic_timer.period);
   apic->lapic_timer.target_expiration = ktime_add_ns(now, apic->lapic_timer.period);
 
-#if OSNET_TRACE_PRINTK
+#if OSNET_TRACE_DTID_TARGET_EXPIRATION
   trace_printk("%llu\t%llu\n", (u64)kvm_lapic_get_reg(apic, APIC_TMICT), apic->lapic_timer.period);
 #endif
 
@@ -1697,14 +1713,19 @@ int kvm_lapic_reg_write(struct kvm_lapic *apic, u32 reg, u32 val)
       break;
 
 #if OSNET_DTID_WRMSR
+    /* Enable the KVM to update the LAPIC timer for the guest
+     * before the VM entry and set the PIR timer-interrupt bit
+     * and ON bit. Please note that the guest timer-interrpt
+     * vector (0xef) is kernel dependent.
+     */
     hrtimer_cancel(&apic->lapic_timer.timer);
     kvm_lapic_set_reg(apic, APIC_TMICT, val);
-    if (osnet_emulated_timer) {
+    if (osnet_emulated_timer)
+    {
       vcpu->osnet_update_apic_timer = true;
       kvm_x86_ops->osnet_set_pir_on(vcpu, 0xef);
     }
-    else
-      start_apic_timer(apic);
+    else start_apic_timer(apic);
 #else
     hrtimer_cancel(&apic->lapic_timer.timer);
     kvm_lapic_set_reg(apic, APIC_TMICT, val);
@@ -2011,9 +2032,6 @@ int kvm_apic_local_deliver(struct kvm_lapic *apic, int lvt_type)
 {
   u32 reg = kvm_lapic_get_reg(apic, lvt_type);
   int vector, mode, trig_mode;
-  /* OSNET-DTID */
-  //printk(KERN_INFO "%s: ... \n", __func__);
-  /* OSNET-END */
 
   if (kvm_apic_hw_enabled(apic) && !(reg & APIC_LVT_MASKED)) {
     vector = reg & APIC_VECTOR_MASK;

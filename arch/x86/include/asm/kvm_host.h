@@ -1036,8 +1036,19 @@ struct kvm_x86_ops {
 	void (*setup_mce)(struct kvm_vcpu *vcpu);
 
 #if OSNET_DTID
+  /* Set up the PIR timer-interrupt bit and ON bit. */
   void (*osnet_set_pir_on)(struct kvm_vcpu *vcpu, int vector);
 #endif
+
+#if OSNET_TRACE_VMEXIT
+  /* Measure the overhead in ns between the VM exit and entry
+   * due to the particular VM exit reason. If the VM exit
+   * reason is specified as OSNET_ALL_VMEXIT_REASON, it
+   * indicates to measure the overhead for all the reasons.
+   */
+  void (*osnet_trace_vmexit)(struct kvm_vcpu *vcpu, u32 exit_reason, const char *message);
+#endif
+
 };
 
 struct kvm_arch_async_pf {

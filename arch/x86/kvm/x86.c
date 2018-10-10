@@ -104,20 +104,47 @@ EXPORT_SYMBOL_GPL(kvm_x86_ops);
 
 /* OSNET */
 #include <asm/osnet.h>
+#include <asm/vmx.h>
 /* OSNET-END */
 
 #if OSNET_DTID_WRMSR
+/*  Enable the KVM to configure the LAPIC timer before the VM
+ *  entry and set the PIR timer-interrupt bit and ON bit.
+ */
 extern bool osnet_emulated_timer;
 static bool __read_mostly osnet_enable_emulated_timer = false;
-module_param_named(osnet_enable_emulated_timer ,
-                   osnet_enable_emulated_timer ,
+module_param_named(osnet_enable_emulated_timer,
+                   osnet_enable_emulated_timer,
                    bool,
                    0644);
-MODULE_PARM_DESC(osnet_enable_emulated_timer ,
+MODULE_PARM_DESC(osnet_enable_emulated_timer,
                  "By default, OSNET timer emulation is disabled.");
+
+/* Since KVM configures the LAPIC timer for the guest timer
+ * event, it needs to convert the guest timer to the host
+ * timer by the LAPIC mutiplication and shift factor.
+ */
+static int __read_mostly osnet_lapic_mult = 26781139;
+module_param_named(osnet_lapic_mult,
+                   osnet_lapic_mult,
+                   int,
+                   0644);
+MODULE_PARM_DESC(osnet_lapic_mult, "LAPIC multiplication factor.");
+static int __read_mostly osnet_lapic_shift= 32;
+module_param_named(osnet_lapic_shift,
+                   osnet_lapic_shift,
+                   int,
+                   0644);
+MODULE_PARM_DESC(osnet_lapic_shift, "LAPIC shift factor.");
 #endif
 
 #if OSNET_DTID_SYNC_PIR_VIRR
+/* Upon each guest's hyperacll, start or stop: 
+ * - syncing the every bit except the timer-interrupt bit from
+ *   the PIR upon the next VM entry.
+ * - Set up the timer-interrupt bit of PIR and ON to deliver
+ *   the timer interrupt as the posted interrupt to the guest.
+ */
 extern bool osnet_sync_pir_virr;
 static bool __read_mostly osnet_enable_sync_pir_virr = false;
 module_param_named(osnet_enable_sync_pir_virr ,
@@ -2180,7 +2207,24 @@ int kvm_set_msr_common(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
     return kvm_set_apic_base(vcpu, msr_info);
   case APIC_BASE_MSR ... APIC_BASE_MSR + 0x3ff:
 #if OSNET_DTID_WRMSR
-    osnet_emulated_timer = osnet_enable_emulated_timer;
+    /* Guest updates TMICT and is trapped. Please consult with
+     * the Intel SDM for the TMICT MSR value.
+     */
+   if (msr == 0x838)
+    {
+#if OSNET_DTID_SYNC_PIR_VIRR
+      /* Enable/disable to sync the every bit except the
+       * timer-interrupt bit from the PIR upon the next VM
+       * entry.
+       */
+      osnet_sync_pir_virr = osnet_enable_sync_pir_virr;
+#endif
+      /* Enable/disable KVM to configure the LAPIC timer
+       * before entering the guest and set the timer-interrupt
+       * bit of PIR and ON.
+       */
+      osnet_emulated_timer = osnet_enable_emulated_timer;
+    }
 #endif
     return kvm_x2apic_msr_write(vcpu, msr, data);
   case MSR_IA32_TSCDEADLINE:
@@ -6182,15 +6226,26 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
     break;
 #if OSNET_DTID_HYPERCALL
   case KVM_HC_SET_PIR_ON:
-    if (osnet_enable_sync_pir_virr) {
+    /* Upon each guest's hyperacll, start or stop: 
+     * - syncing the every bit except the timer-interrupt bit
+     *   from the PIR upon the next VM entry.
+     * - Set up the timer-interrupt bit of PIR and ON to
+     *   deliver the timer interrupt as the posted interrupt to
+     *   the guest.
+     */
+    if (osnet_enable_sync_pir_virr)
+    {
       osnet_sync_pir_virr = osnet_enable_sync_pir_virr;
       kvm_x86_ops->osnet_set_pir_on(vcpu, 0xef);
+#if OSNET_TRACE_DTID_HYPERCALL
       trace_printk("Guest has called to syn PIR to vIRR from CPU%u\n",
                    smp_processor_id());
+#endif
     }
-    else
-      trace_printk("Guest has called from CPU%u\n",
-                   smp_processor_id());
+    /* The return value of hypercall is set to RAX, before the
+     * control returns to the guest.
+     */
+    ret = 0;
     break;
 #endif
   default:
@@ -6655,37 +6710,34 @@ void kvm_arch_mmu_notifier_invalidate_page(struct kvm *kvm,
 }
 
 #if OSNET_DTID_WRMSR
-/* XXX: Need to dynamically determin mult, shift and min delta(ns). */
-/* Assume the guest uses the one-shot or periodic timer. */
+/* Assume the guest uses the one-shot or periodic timer
+ * instead of the TSC dealine timer. The timer is emulated by
+ * KVM. KVM converts the guest timer to the host timer based
+ * on the LAPIC multiplication and shift factor. Then, it
+ * updates the LAPIC with the converted guest timer event,
+ * before the VM entry.
+ */
 #ifndef APIC_BUS_CYCLE_NS
 #define APIC_BUS_CYCLE_NS 1
 #endif
-static unsigned long long osnet_lapic_emulate_timer(struct kvm_vcpu *vcpu) {
-  u32 mult = 26781139;
-  u32 shift = 32;
-  //int64_t min_delta = 1000000000/HZ;
+static u64 osnet_lapic_emulate_timer(struct kvm_vcpu *vcpu)
+{
   struct kvm_lapic *apic = vcpu->arch.apic;
   u64 tmict = (u64)kvm_lapic_get_reg(apic, APIC_TMICT);
-  int64_t delta = 0;
+  u32 mult = osnet_lapic_mult;
+  u32 shift = osnet_lapic_shift;
   u64 ticks = 0;
 
   /* Compute the next-event period (ns). */
   apic->lapic_timer.period = tmict * APIC_BUS_CYCLE_NS * apic->divide_count;
-  delta = apic->lapic_timer.period;
 
-  /* Convert the period/next event in ns to the host clock cycles. */
-#if 0
-  if (delta > min_delta)
-    ticks = ((unsigned long long) delta * mult) >> shift;
-  else {
-    ticks = ((unsigned long long) min_delta * mult) >> shift;
-  }
+  /* Compute the next-event period in clock cycles. */
+  ticks = ((unsigned long long) apic->lapic_timer.period * mult) >> shift;
+
+#if OSNET_TRACE_DTID_EMULATE_TIMER
+  trace_printk("%llu\t%llu\t%llu\n", tmict, apic->lapic_timer.period, ticks);
 #endif
 
-  ticks = ((unsigned long long) delta * mult) >> shift;
-  trace_printk("%llu\t%llu\t%llu\n", tmict, delta, ticks);
-
-  /* Set PIR and ON when handling the guest's WRMSR TMICT. */
   /* Start the LAPIC timer before the vcpu runs. */
   apic_write(APIC_TMICT, ticks);
   return ticks;
@@ -6699,6 +6751,10 @@ static unsigned long long osnet_lapic_emulate_timer(struct kvm_vcpu *vcpu) {
  */
 static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 {
+#if OSNET_TRACE_VMEXIT_SECTION
+  kvm_x86_ops->osnet_trace_vmexit(vcpu, OSNET_ALL_VMEXIT_REASON, "all-vmenter: 4");
+#endif
+
   int r;
   bool req_int_win =
     dm_request_for_irq_injection(vcpu) &&
@@ -6902,13 +6958,33 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
   }
 
 #if OSNET_DTID_WRMSR
-  if (vcpu->osnet_update_apic_timer) {
+  /* Update the LAPIC timer for the guest upon the guest's
+   * WRMSR TMICT, before entering the non-root mode.
+   */
+  if (vcpu->osnet_update_apic_timer)
+  {
     osnet_lapic_emulate_timer(vcpu);
     vcpu->osnet_update_apic_timer = false;
   }
 #endif
 
+#if OSNET_TRACE_VMEXIT_SECTION
+  kvm_x86_ops->osnet_trace_vmexit(vcpu, OSNET_ALL_VMEXIT_REASON, "all-vmenter: 5");
+#endif
+
+#if OSNET_TRACE_VMEXIT_OVERALL
+  kvm_x86_ops->osnet_trace_vmexit(vcpu, OSNET_ALL_VMEXIT_REASON, "all-vmenter: 5");
+#endif
+
   kvm_x86_ops->run(vcpu);
+
+#if OSNET_TRACE_VMEXIT_OVERALL
+  kvm_x86_ops->osnet_trace_vmexit(vcpu, OSNET_ALL_VMEXIT_REASON, "all-vmexit: 1");
+#endif
+  
+#if OSNET_TRACE_VMEXIT_SECTION
+  kvm_x86_ops->osnet_trace_vmexit(vcpu, OSNET_ALL_VMEXIT_REASON, "all-vmexit: 1");
+#endif
 
   /*
    * Do this here before restoring debug registers on the host.  And
@@ -6967,7 +7043,15 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
   if (vcpu->arch.apic_attention)
     kvm_lapic_sync_from_vapic(vcpu);
 
+#if OSNET_TRACE_VMEXIT_SECTION
+  kvm_x86_ops->osnet_trace_vmexit(vcpu, OSNET_ALL_VMEXIT_REASON, "all-vmexit: 2");
+#endif
+
   r = kvm_x86_ops->handle_exit(vcpu);
+
+#if OSNET_TRACE_VMEXIT_SECTION
+  kvm_x86_ops->osnet_trace_vmexit(vcpu, OSNET_ALL_VMEXIT_REASON, "all-vmexit: 3");
+#endif
 
   return r;
 
@@ -6976,6 +7060,11 @@ cancel_injection:
   if (unlikely(vcpu->arch.apic_attention))
     kvm_lapic_sync_from_vapic(vcpu);
 out:
+
+#if OSNET_TRACE_VMEXIT_SECTION
+  kvm_x86_ops->osnet_trace_vmexit(vcpu, OSNET_ALL_VMEXIT_REASON, "all-vmexit: out");
+#endif
+
   return r;
 }
 

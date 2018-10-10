@@ -908,6 +908,10 @@ void setup_secondary_APIC_clock(void)
 }
 
 #if OSNET_DTID_LAPIC
+/* The PIR timer-interrupt bit and ON bit are set for the
+ * vCPUs, when the LAPIC timer of host core fires and its IRQ
+ * is invoked.
+ */
 struct kvm_x86_ops *kvm_x86_ops_in_lapic = NULL;
 EXPORT_SYMBOL_GPL(kvm_x86_ops_in_lapic);
 struct kvm *kvm_in_lapic = NULL;
@@ -947,38 +951,23 @@ static void local_apic_timer_interrupt(void)
 
 	evt->event_handler(evt);
 
-  /* OSNET-DTID */
-  /* Should we break when hitting a NULL vCPU thread? or just
-   * scan the array of KVM_MAX_VCPUS elements all the times?
-   * Consider to use the number of online vCPUs for the
-   * optimization.
-   */
 #if OSNET_DTID_LAPIC
-  if (cpu == 0 && kvm_in_lapic && kvm_x86_ops_in_lapic) {
+  /* Asssume the boot CPU is used to set the PIR
+   * timer-interrupt bit and ON bit. For the better
+   * scalability, we should consider to set up the PIR and ON
+   * for the online vCPUs instead of all possible vCPUs.
+   */
+  if (cpu == 0 && kvm_in_lapic && kvm_x86_ops_in_lapic)
+  {
     int i;
-    for (i = 0; i < KVM_MAX_VCPUS; i++) {
+    for (i = 0; i < KVM_MAX_VCPUS; i++)
+    {
       struct kvm_vcpu *vcpu = kvm_in_lapic->vcpus[i];
-      if (vcpu) {
-        kvm_x86_ops_in_lapic->osnet_set_pir_on(vcpu, 0xef);
-      }
-      else
-        trace_printk("vCPU is not found.\n");
+      if (vcpu) kvm_x86_ops_in_lapic->osnet_set_pir_on(vcpu, 0xef);
     }
   }
 #endif
 }
-
-#if 0
-  if (cpu == 2 && kvm_in_lapic && kvm_x86_ops_in_lapic) {
-    int i;
-    for (i = 0; i < KVM_MAX_VCPUS; i++) {
-      struct kvm_vcpu *vcpu = kvm_in_lapic->vcpus[i];
-      if (vcpu) {
-        kvm_x86_ops_in_lapic->deliver_posted_interrupt(vcpu, 0xef);
-      }
-    }
-  }
-#endif
 
 /*
  * Local APIC timer interrupt. This is the most natural way for doing

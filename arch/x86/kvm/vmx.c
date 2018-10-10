@@ -65,6 +65,9 @@ MODULE_LICENSE("GPL");
 /* OSNET-END */
 
 #if OSNET_HLT
+/* When the HLT-exiting is disabled, the IDLE guest remains on
+ * its core until its time slice expires.
+ */
 static bool __read_mostly osnet_enable_hlt_exiting = 1;
 module_param_named(osnet_enable_hlt_exiting,
                    osnet_enable_hlt_exiting,
@@ -75,13 +78,16 @@ MODULE_PARM_DESC(osnet_enable_hlt_exiting,
 #endif
 
 #if OSNET_DTID
+/* Set the target PIR bit and ON bit (most likely for the
+ * timer interrupt).
+ */
 static bool __read_mostly osnet_enable_set_pir_on = 0;
 module_param_named(osnet_enable_set_pir_on,
                    osnet_enable_set_pir_on,
                    bool,
                    0644);
 MODULE_PARM_DESC(osnet_enable_set_pir_on,
-                 "By default, Setting PIR is disabled.");
+                 "By default, setting PIR and ON is disabled.");
 #endif
 
 static const struct x86_cpu_id vmx_cpu_id[] = {
@@ -1680,7 +1686,10 @@ static __always_inline u32 vmcs_read32(unsigned long field)
   return __vmcs_readl(field);
 }
 
-#if OSNET_VMCS
+#if OSNET_VMCS_READ64
+/* Expose the VMCS read interface, so the user-defined kernel
+ * module can read the VMCS.
+ */
 __always_inline u64 vmcs_read64(unsigned long field)
 #else
 static __always_inline u64 vmcs_read64(unsigned long field)
@@ -1693,7 +1702,7 @@ static __always_inline u64 vmcs_read64(unsigned long field)
   return __vmcs_readl(field) | ((u64)__vmcs_readl(field+1) << 32);
 #endif
 }
-#if OSNET_VMCS
+#if OSNET_VMCS_READ64
 EXPORT_SYMBOL_GPL(vmcs_read64);
 #endif
 
@@ -1732,7 +1741,10 @@ static __always_inline void vmcs_write32(unsigned long field, u32 value)
   __vmcs_writel(field, value);
 }
 
-#if OSNET_VMCS
+#if OSNET_VMCS_WRITE64
+/* Expose the VMCS write interface, so the user-defined kernel
+ * module can update the VMCS.
+ */
 __always_inline void vmcs_write64(unsigned long field, u64 value)
 #else
 static __always_inline void vmcs_write64(unsigned long field, u64 value)
@@ -1745,7 +1757,7 @@ static __always_inline void vmcs_write64(unsigned long field, u64 value)
   __vmcs_writel(field+1, value >> 32);
 #endif
 }
-#if OSNET_VMCS
+#if OSNET_VMCS_WRITE64
 EXPORT_SYMBOL_GPL(vmcs_write64);
 #endif
 
@@ -3625,17 +3637,14 @@ static __init bool allow_1_setting(u32 msr, u32 ctl)
   return vmx_msr_high & ctl;
 }
 
-/* OSNET-HLT
- * For the purpose of our project, we would like to let VM to
- * stay on its CPU, even when it is in idle. We eliminate the
- * VM exits due to the HLT instructions.
- *
- * Disable the HLT exiting. Every VM is initialized without
- * the HLT exiting. When the VM is in idle, it issues the HLT
- * instruction to bring the CPU core to the HALT state. Since
+/* We would like to let VM to stay on its CPU, even when it is
+ * in idle, by eliminating the VM exit due to the HLT
+ * instruction. Every VM is initialized with the HLT-exiting
+ * disabled. When the VM is in idle, it issues the HLT
+ * instruction and bring the CPU core to the HALT state. Since
  * HLT is the privilege instruction, it will trigger the VM
- * exit. Then, the control is handed over to the hypervisor,
- * which may or may not emulate the behavior of HALT state.
+ * exit. The control is handed over to KVM to emulate the HLT
+ * instruction.
  */
 static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 {
@@ -3648,8 +3657,8 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
   u32 _vmentry_control = 0;
 
 #if OSNET_HLT
-  if (!osnet_enable_hlt_exiting) {min = 0;}
-  else {min = CPU_BASED_HLT_EXITING;}
+  if (!osnet_enable_hlt_exiting) min = 0;
+  else min = CPU_BASED_HLT_EXITING;
 #else
   min = CPU_BASED_HLT_EXITING;
 #endif
@@ -4991,13 +5000,20 @@ static void vmx_disable_intercept_for_msr(u32 msr, bool longmode_only)
             msr, MSR_TYPE_R | MSR_TYPE_W);
 }
 
-#if OSNET_DTID_INTERCEPT_MSR
+#if OSNET_DTID_INTERCEPT_MSR_X2APIC
+/* Expose the MSR-intercept interface. Once the MSR is not
+ * intercepted by KVM, the guest updates the MSR through the
+ * x2APIC interface without a VM exit. However, we must
+ * consult the Intel Software Developer Manual to determine
+ * which MSR is allowed us to do so.
+ */
 void vmx_disable_intercept_msr_x2apic(u32 msr, int type, bool apicv_active)
 #else
 static void vmx_disable_intercept_msr_x2apic(u32 msr, int type, bool apicv_active)
 #endif
 {
-  if (apicv_active) {
+  if (apicv_active)
+  {
     __vmx_disable_intercept_for_msr(vmx_msr_bitmap_legacy_x2apic_apicv,
         msr, type);
     __vmx_disable_intercept_for_msr(vmx_msr_bitmap_longmode_x2apic_apicv,
@@ -5009,22 +5025,26 @@ static void vmx_disable_intercept_msr_x2apic(u32 msr, int type, bool apicv_activ
         msr, type);
   }
 }
-#if OSNET_DTID_INTERCEPT_MSR
+#if OSNET_DTID_INTERCEPT_MSR_X2APIC
 EXPORT_SYMBOL_GPL(vmx_disable_intercept_msr_x2apic);
 #endif
 
-#if OSNET_DTID_INTERCEPT_MSR
+#if OSNET_DTID_INTERCEPT_MSR_X2APIC
+/* Enable the MSR-intercept by KVM. When the guest updates the
+ * MSR through the x2APIC interface, it induces the VM exit.
+ */
 static void __osnet_vmx_enable_intercept_for_msr(
   unsigned long *msr_bitmap,
   u32 msr,
-  int type) {
-
+  int type)
+{
   int f = sizeof(unsigned long);
 
   if (!cpu_has_vmx_msr_bitmap())
     return;
 
-  if (msr <= 0x1fff) {
+  if (msr <= 0x1fff)
+  {
     if (type & MSR_TYPE_R)
       /* read-low */
       __set_bit(msr, msr_bitmap + 0x000 / f);
@@ -5033,7 +5053,9 @@ static void __osnet_vmx_enable_intercept_for_msr(
       /* write-low */
       __set_bit(msr, msr_bitmap + 0x800 / f);
 
-  } else if ((msr >= 0xc0000000) && (msr <= 0xc0001fff)) {
+  }
+  else if ((msr >= 0xc0000000) && (msr <= 0xc0001fff))
+  {
     msr &= 0x1fff;
     if (type & MSR_TYPE_R)
       /* read-high */
@@ -5047,12 +5069,15 @@ static void __osnet_vmx_enable_intercept_for_msr(
 
 void osnet_vmx_enable_intercept_msr_x2apic(u32 msr, int type, bool apicv_active)
 {
-  if (apicv_active) {
+  if (apicv_active)
+  {
     __osnet_vmx_enable_intercept_for_msr(vmx_msr_bitmap_legacy_x2apic_apicv,
                                          msr, type);
     __osnet_vmx_enable_intercept_for_msr(vmx_msr_bitmap_longmode_x2apic_apicv,
                                          msr, type);
-  } else {
+  }
+  else
+  {
     __osnet_vmx_enable_intercept_for_msr(vmx_msr_bitmap_legacy_x2apic,
                                          msr, type);
     __osnet_vmx_enable_intercept_for_msr(vmx_msr_bitmap_longmode_x2apic,
@@ -5178,29 +5203,55 @@ static void vmx_deliver_posted_interrupt(struct kvm_vcpu *vcpu, int vector)
   }
 }
 
-/* OSNET-DTID
- * Enable or disable the direct timer interrupt delivery.
- * Please note that across various platforms and kernel
- * versions, the interrupt vector for the timer interrupt may
- * be different. Currently, the timer interrupt is 0xEF.
- */
 #if OSNET_DTID
-static void osnet_vmx_set_pir_on(struct kvm_vcpu *vcpu, int vector) {
+/* Enable or disable the direct timer interrupt delivery
+ * through setting up the target PIR bit and ON bit. Please
+ * note that across various platforms and kernel versions, the
+ * interrupt vector for the timer interrupt may be different.
+ * Currently, the timer interrupt is 0xEF.
+ */
+static void osnet_vmx_set_pir_on(struct kvm_vcpu *vcpu, int vector)
+{
   struct vcpu_vmx *vmx = to_vmx(vcpu);
-  if (osnet_enable_set_pir_on) {
+  if (osnet_enable_set_pir_on)
+  {
     int was_set = 0;
     was_set = pi_test_and_set_pir(vector, &vmx->pi_desc);
-    if (was_set) {
+    if (was_set)
+    {
+#if OSNET_TRACE_DTID_SET_PIR_ON
       trace_printk("PIR\t%d\t%lld\n", was_set, ktime_get());
+#endif
       return;
     }
 
     was_set = pi_test_and_set_on(&vmx->pi_desc);
-    if (was_set) {
+    if (was_set)
+    {
+#if OSNET_TRACE_DTID_SET_PIR_ON
       trace_printk("ON\t%d\t%lld\n", was_set, ktime_get());
+#endif
       return;
     }
   }
+}
+#endif
+
+#if OSNET_TRACE_VMEXIT
+/* Measure the overhead in ns between the VM exit and entry
+ * due to the particular VM exit reason. If the VM exit reason
+ * is specified as OSNET_ALL_VMEXIT_REASON, it indicates to
+ * measure the overhead for all the reasons.
+ */
+static void osnet_vmx_trace_vmexit(struct kvm_vcpu *vcpu,
+                                   u32 exit_reason,
+                                   const char *message)
+{
+  struct vcpu_vmx *vmx = to_vmx(vcpu);
+
+  if (vmx->exit_reason == exit_reason ||
+      exit_reason == OSNET_ALL_VMEXIT_REASON)
+    trace_printk("%s: %llu\n", message, ktime_get());
 }
 #endif
 
@@ -11769,7 +11820,14 @@ static struct kvm_x86_ops vmx_x86_ops __ro_after_init = {
   .update_pi_irte = vmx_update_pi_irte,
 
 #if OSNET_DTID
+  /* Enable or disable the direct timer interrupt delivery
+   * through setting up the target PIR bit and ON bit.
+   */
   .osnet_set_pir_on = osnet_vmx_set_pir_on,
+#endif
+
+#if OSNET_TRACE_VMEXIT
+  .osnet_trace_vmexit = osnet_vmx_trace_vmexit,
 #endif
 
 #ifdef CONFIG_X86_64

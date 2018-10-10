@@ -37,7 +37,7 @@
 
 /* OSNET */
 #include <asm/osnet.h>
-/* OSENET-END */
+/* OSNET-END */
 
 #ifndef KVM_MAX_VCPU_ID
 #define KVM_MAX_VCPU_ID KVM_MAX_VCPUS
@@ -271,6 +271,9 @@ struct kvm_vcpu {
 	struct dentry *debugfs_dentry;
 
 #if OSNET_DTID_WRMSR
+  /* Update the LAPIC timer for the guest, before entering the
+   * non-root mode.
+   */
   bool osnet_update_apic_timer;
 #endif
 };

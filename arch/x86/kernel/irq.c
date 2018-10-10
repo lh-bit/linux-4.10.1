@@ -18,6 +18,10 @@
 #include <asm/hw_irq.h>
 #include <asm/desc.h>
 
+/* OSNET */
+#include <asm/osnet.h>
+/* OSNET-END */
+
 #define CREATE_TRACE_POINTS
 #include <asm/trace/irq_vectors.h>
 
@@ -295,9 +299,9 @@ __visible void smp_kvm_posted_intr_ipi(struct pt_regs *regs)
 	struct pt_regs *old_regs = set_irq_regs(regs);
 
 	entering_ack_irq();
-  /* OSNET-DTID */
-  trace_printk("PIN:%llu\n", ktime_get());
-  /* OSNET-END */
+#if OSNET_TRACE_HOST_POSTED_INTERRUPT_HANDLER
+  trace_printk("%llu\n", ktime_get());
+#endif
 	inc_irq_stat(kvm_posted_intr_ipis);
 	exiting_irq();
 	set_irq_regs(old_regs);
