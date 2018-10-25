@@ -1347,6 +1347,9 @@ retry:
 
 	/* Reprogramming necessary ? */
 	if (!tick_program_event(expires_next, 0)) {
+#if OSNET_TRACE_HRTIMER_INTERRUPT
+    trace_printk("no reprogramming the timer.\n");
+#endif
 		cpu_base->hang_detected = 0;
 		return;
 	}
@@ -1392,6 +1395,10 @@ retry:
 	tick_program_event(expires_next, 1);
 	printk_once(KERN_WARNING "hrtimer: interrupt took %llu ns\n",
 		    ktime_to_ns(delta));
+
+#if OSNET_TRACE_HRTIMER_INTERRUPT
+    trace_printk("the next timer was expired.\n");
+#endif
 }
 
 /*

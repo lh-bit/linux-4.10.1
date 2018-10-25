@@ -21,9 +21,18 @@
 
 #include "tick-internal.h"
 
+/* OSNET */
+#include <asm/osnet.h>
+/* OSNET-END */
+
 /**
  * tick_program_event
  */
+#if OSNET_DTID_CLOCKEVENTS_PROGRAM_EVENT
+bool osnet_program_clockevent = false;
+EXPORT_SYMBOL_GPL(osnet_program_clockevent);
+#endif
+
 int tick_program_event(ktime_t expires, int force)
 {
 	struct clock_event_device *dev = __this_cpu_read(tick_cpu_device.evtdev);
@@ -44,7 +53,18 @@ int tick_program_event(ktime_t expires, int force)
 		clockevents_switch_state(dev, CLOCK_EVT_STATE_ONESHOT);
 	}
 
+#if OSNET_TRACE_TICK_PROGRAM_EVENT
+  trace_printk("%llu\n", ktime_get());
+#endif
+
+#if OSNET_DTID_CLOCKEVENTS_PROGRAM_EVENT
+  if (osnet_program_clockevent)
+    return osnet_clockevents_program_event(dev, expires, force);
+  else
+    return clockevents_program_event(dev, expires, force);
+#else
 	return clockevents_program_event(dev, expires, force);
+#endif
 }
 
 /**

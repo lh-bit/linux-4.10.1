@@ -20,6 +20,10 @@
 
 #include "tick-internal.h"
 
+/* OSNET */
+#include <asm/osnet.h>
+/* OSNET-END */
+
 /* The registered clock event devices */
 static LIST_HEAD(clockevent_devices);
 static LIST_HEAD(clockevents_released);
@@ -338,8 +342,142 @@ int clockevents_program_event(struct clock_event_device *dev, ktime_t expires,
 	clc = ((unsigned long long) delta * dev->mult) >> dev->shift;
 	rc = dev->set_next_event((unsigned long) clc, dev);
 
+#if OSNET_TRACE_CLOCKEVENTS_PROGRAM_EVENT
+  trace_printk("%lld\t%lld\t%lld\t%llu\t%llu\n",
+               dev->min_delta_ns, dev->max_delta_ns,
+               delta, clc, expires);
+#endif
+
 	return (rc && force) ? clockevents_program_min_delta(dev) : rc;
 }
+
+#if OSNET_DTID_CLOCKEVENTS_PROGRAM_EVENT
+ktime_t osnet_ignorance_interval_ns = 140000;
+bool osnet_enable_program_periodic_clockevent = false;
+EXPORT_SYMBOL_GPL(osnet_ignorance_interval_ns);
+EXPORT_SYMBOL_GPL(osnet_enable_program_periodic_clockevent);
+
+static bool osnet_is_aperiodic(int64_t delta, ktime_t lower)
+{
+  if (delta < lower) return true;
+  return false;
+}
+
+static bool osnet_is_periodic(int64_t delta, ktime_t lower, ktime_t upper)
+{
+  if (lower <= delta && delta <= upper) return true;
+  return false;
+}
+
+/* The logic tiggers the TMICT WRMSR, only when it is a
+ * aperiodic timer event when the timer is transitioned from
+ * the aperiodic to periodic.
+ *
+ * Algorithm:
+ * if the current timer is periodic,
+ *   if the previous timer is aperiodic,
+ *     restore the periodic timer interval.
+ *   else
+ *     declare the current timer is satisfied.
+ * else if the current timer is aperiodic,
+ *        program the timer chip.
+ * else
+ *   the current timer is unexpected large timer.
+ *   program the timer chip to the guest timer interval.
+ */
+static int osnet_program_periodic_clockevent(struct clock_event_device *dev,
+                                             int64_t delta,
+                                             unsigned long long clc)
+{
+  ktime_t lower_periodic_timer = 1000000000 / HZ - osnet_ignorance_interval_ns;
+  ktime_t upper_periodic_timer = 1000000000 / HZ;
+
+#if OSNET_TRACE_DTID_OSNET_PROGRAM_PERIODIC_CLOCKEVENT_DELTA
+  trace_printk("%s: %lld\t%lld\n", __func__, dev->osnet_delta, delta);
+#endif
+
+  if (osnet_is_periodic(delta, lower_periodic_timer, upper_periodic_timer))
+  {
+    if (osnet_is_aperiodic(dev->osnet_delta, lower_periodic_timer))
+    {
+      clc = ((unsigned long long) upper_periodic_timer * dev->mult) >> dev->shift;
+      return dev->set_next_event((unsigned long) clc, dev);
+    }
+    else
+    {
+      return 0;
+    }
+  }
+  else if (osnet_is_aperiodic(delta, lower_periodic_timer))
+  {
+    return dev->set_next_event((unsigned long) clc, dev);
+  }
+  else
+  {
+#if OSNET_TRACE_DTID_OSNET_PROGRAM_PERIODIC_CLOCKEVENT
+    trace_printk("Greater than periodic-timer upper bound: %lld\n", delta);
+#endif
+    clc = ((unsigned long long) upper_periodic_timer * dev->mult) >> dev->shift;
+    return dev->set_next_event((unsigned long) clc, dev);
+  }
+  return 0;
+}
+
+int osnet_clockevents_program_event(struct clock_event_device *dev,
+                                    ktime_t expires, bool force)
+{
+	unsigned long long clc;
+	int64_t delta;
+	int rc;
+
+	if (unlikely(expires < 0))
+  {
+		WARN_ON_ONCE(1);
+		return -ETIME;
+	}
+
+	dev->next_event = expires;
+
+	if (clockevent_state_shutdown(dev))
+		return 0;
+
+	/* We must be in ONESHOT state here */
+	WARN_ONCE(!clockevent_state_oneshot(dev), "Current state: %d\n",
+		  clockevent_get_state(dev));
+
+	/* Shortcut for clockevent devices that can deal with ktime. */
+	if (dev->features & CLOCK_EVT_FEAT_KTIME)
+		return dev->set_next_ktime(expires, dev);
+
+	delta = ktime_to_ns(ktime_sub(expires, ktime_get()));
+	if (delta <= 0)
+		return force ? clockevents_program_min_delta(dev) : -ETIME;
+
+	delta = min(delta, (int64_t) dev->max_delta_ns);
+	delta = max(delta, (int64_t) dev->min_delta_ns);
+
+	clc = ((unsigned long long) delta * dev->mult) >> dev->shift;
+
+  if (osnet_enable_program_periodic_clockevent)
+  {
+    rc = osnet_program_periodic_clockevent(dev, delta, clc);
+  }
+  else
+  {
+    rc = dev->set_next_event((unsigned long) clc, dev);
+  }
+
+#if OSNET_TRACE_CLOCKEVENTS_PROGRAM_EVENT
+  trace_printk("%lld\t%lld\t%lld\t%llu\t%llu\n",
+               dev->min_delta_ns, dev->max_delta_ns,
+               delta, clc, expires);
+#endif
+
+  dev->osnet_delta = delta;
+
+	return (rc && force) ? clockevents_program_min_delta(dev) : rc;
+}
+#endif
 
 /*
  * Called after a notify add to make devices available which were

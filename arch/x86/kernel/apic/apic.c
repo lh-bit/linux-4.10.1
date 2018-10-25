@@ -943,6 +943,13 @@ static void local_apic_timer_interrupt(void)
 		return;
 	}
 
+#if OSNET_TRACE_TIMER_EVENT_HANDLER
+  /* The timer event handler switches from
+   * tick_handle_periodic() to hrtimer_interrupt().
+   */
+  trace_printk("%p\n", evt->event_handler);
+#endif
+
 	/*
 	 * the NMI deadlock-detector uses this.
 	 */

@@ -15,6 +15,10 @@
 # include <linux/ktime.h>
 # include <linux/notifier.h>
 
+/* OSNET */
+#include <asm/osnet.h>
+/* OSNET-END */
+
 struct clock_event_device;
 struct module;
 
@@ -128,6 +132,10 @@ struct clock_event_device {
 	const struct cpumask	*cpumask;
 	struct list_head	list;
 	struct module		*owner;
+
+#if OSNET_DTID_CLOCKEVENTS_PROGRAM_EVENT
+  int64_t osnet_delta;
+#endif
 } ____cacheline_aligned;
 
 /* Helpers to verify state of a clockevent device */
