@@ -909,13 +909,15 @@ void setup_secondary_APIC_clock(void)
 
 #if OSNET_DTID_LAPIC
 /* The PIR timer-interrupt bit and ON bit are set for the
- * vCPUs, when the LAPIC timer of host core fires and its IRQ
- * is invoked.
+ * vCPUs, when the LAPIC timer of hypervisor core fires and
+ * its IRQ is invoked.
  */
 struct kvm_x86_ops *kvm_x86_ops_in_lapic = NULL;
-EXPORT_SYMBOL_GPL(kvm_x86_ops_in_lapic);
 struct kvm *kvm_in_lapic = NULL;
+unsigned int osnet_hypervisor_core = 0;
+EXPORT_SYMBOL_GPL(kvm_x86_ops_in_lapic);
 EXPORT_SYMBOL_GPL(kvm_in_lapic);
+EXPORT_SYMBOL_GPL(osnet_hypervisor_core);
 #endif
 
 /*
@@ -951,13 +953,17 @@ static void local_apic_timer_interrupt(void)
 
 	evt->event_handler(evt);
 
+#if OSNET_TRACE_TIMER_EVENT_HANDLER
+  trace_printk("%p\n", evt->event_handler);
+#endif
+
 #if OSNET_DTID_LAPIC
   /* Asssume the boot CPU is used to set the PIR
    * timer-interrupt bit and ON bit. For the better
    * scalability, we should consider to set up the PIR and ON
    * for the online vCPUs instead of all possible vCPUs.
    */
-  if (cpu == 0 && kvm_in_lapic && kvm_x86_ops_in_lapic)
+  if (cpu == osnet_hypervisor_core && kvm_in_lapic && kvm_x86_ops_in_lapic)
   {
     int i;
     for (i = 0; i < KVM_MAX_VCPUS; i++)
