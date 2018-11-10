@@ -67,7 +67,7 @@
 #include <asm/osnet.h>
 /* OSNET-END */
 
-#if OSNET_DTID_LAPIC
+#if OSNET_DTID_LAPIC_TIMER_INTERRUPT_HANDLER
 /* LAPIC timer-interrupt handler is able to set up the PIR
  * timer-interrupt bit and ON bit, when the LAPIC timer of
  * host core fires and invoke the IRQ.
@@ -730,14 +730,14 @@ static void kvm_destroy_vm(struct kvm *kvm)
 	int i;
 	struct mm_struct *mm = kvm->mm;
 
-#if OSNET_DTID_LAPIC
+#if OSNET_DTID_LAPIC_TIMER_INTERRUPT_HANDLER
   /* When the guest is destroyed, unlink the KVM from the
    * LAPIC timer-interrupt handler.
    */
   if (kvm_in_lapic)
   {
     kvm_in_lapic = NULL;
-#if OSNET_TRACE_DTID_LAPIC
+#if OSNET_TRACE_DTID_LAPIC_TIMER_INTERRUPT_HANLDER
     trace_printk("Unlink the KVM from the LAPIC timer-interrupt handler.\n");
 #endif
   }
@@ -3233,7 +3233,7 @@ static int kvm_dev_ioctl_create_vm(unsigned long type)
 
 	fd_install(r, file);
 
-#if OSNET_DTID_LAPIC
+#if OSNET_DTID_LAPIC_TIMER_INTERRUPT_HANDLER
   /* LAPIC timer-interrupt handler is able to retrieve the
    * vCPUs from the KVM instance.
    */
@@ -3958,7 +3958,7 @@ int kvm_init(void *opaque, unsigned vcpu_size, unsigned vcpu_align,
 	if (r)
 		goto out_fail;
 
-#if OSNET_DTID_LAPIC
+#if OSNET_DTID_LAPIC_TIMER_INTERRUPT_HANDLER
   /* LAPIC timer-interrupt handler is able to set the PIR
    * timer-interrupt bit and ON bit.
    */
@@ -4065,12 +4065,12 @@ EXPORT_SYMBOL_GPL(kvm_init);
 
 void kvm_exit(void)
 {
-#if OSNET_DTID_LAPIC
+#if OSNET_DTID_LAPIC_TIMER_INTERRUPT_HANDLER
   /* When KVM instance is terminated, unlink the KVM
    * operations from the LAPIC timer.
    */
   kvm_x86_ops_in_lapic = NULL;
-#if OSNET_TRACE_DTID_LAPIC
+#if OSNET_TRACE_DTID_LAPIC_TIMER_INTERRUPT_HANLDER
   trace_printk("Unlink the KVM ops from LAPIC timer-interrupt handler.\n");
 #endif
 #endif

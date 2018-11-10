@@ -77,7 +77,7 @@ MODULE_PARM_DESC(osnet_enable_hlt_exiting,
                  "By default, HLT exiting is enabled.");
 #endif
 
-#if OSNET_DTID
+#if OSNET_DTID_SET_PIR_ON
 /* Set the target PIR bit and ON bit (most likely for the
  * timer interrupt).
  */
@@ -5203,7 +5203,7 @@ static void vmx_deliver_posted_interrupt(struct kvm_vcpu *vcpu, int vector)
   }
 }
 
-#if OSNET_DTID
+#if OSNET_DTID_SET_PIR_ON
 /* Enable or disable the direct timer interrupt delivery
  * through setting up the target PIR bit and ON bit. Please
  * note that across various platforms and kernel versions, the
@@ -11819,7 +11819,7 @@ static struct kvm_x86_ops vmx_x86_ops __ro_after_init = {
 
   .update_pi_irte = vmx_update_pi_irte,
 
-#if OSNET_DTID
+#if OSNET_DTID_SET_PIR_ON
   /* Enable or disable the direct timer interrupt delivery
    * through setting up the target PIR bit and ON bit.
    */

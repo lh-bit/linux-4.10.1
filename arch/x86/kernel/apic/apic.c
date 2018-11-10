@@ -907,7 +907,7 @@ void setup_secondary_APIC_clock(void)
 	amd_e400_c1e_apic_setup();
 }
 
-#if OSNET_DTID_LAPIC
+#if OSNET_DTID_LAPIC_TIMER_INTERRUPT_HANDLER
 /* The PIR timer-interrupt bit and ON bit are set for the
  * vCPUs, when the LAPIC timer of hypervisor core fires and
  * its IRQ is invoked.
@@ -957,7 +957,7 @@ static void local_apic_timer_interrupt(void)
   trace_printk("%p\n", evt->event_handler);
 #endif
 
-#if OSNET_DTID_LAPIC
+#if OSNET_DTID_LAPIC_TIMER_INTERRUPT_HANDLER
   /* Asssume the boot CPU is used to set the PIR
    * timer-interrupt bit and ON bit. For the better
    * scalability, we should consider to set up the PIR and ON
