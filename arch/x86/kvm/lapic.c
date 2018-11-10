@@ -46,7 +46,7 @@
 #include <asm/osnet.h>
 /* OSNET-END */
 
-#if OSNET_DTID_WRMSR
+#if OSNET_DTID_WRMSR_EMULATE_TIMER
 /*  Enable the KVM to update the LAPIC timer for the guest
  *  before the VM entry and set the PIR timer-interrupt bit
  *  and ON bit.
@@ -1613,7 +1613,7 @@ static void apic_manage_nmi_watchdog(struct kvm_lapic *apic, u32 lvt0_val)
 
 int kvm_lapic_reg_write(struct kvm_lapic *apic, u32 reg, u32 val)
 {
-#if OSNET_DTID_WRMSR
+#if OSNET_DTID_WRMSR_EMULATE_TIMER
   struct kvm_vcpu *vcpu = apic->vcpu;
 #endif
 
@@ -1712,7 +1712,7 @@ int kvm_lapic_reg_write(struct kvm_lapic *apic, u32 reg, u32 val)
     if (apic_lvtt_tscdeadline(apic))
       break;
 
-#if OSNET_DTID_WRMSR
+#if OSNET_DTID_WRMSR_EMULATE_TIMER
     /* Enable the KVM to update the LAPIC timer for the guest
      * before the VM entry and set the PIR timer-interrupt bit
      * and ON bit. Please note that the guest timer-interrpt

@@ -107,7 +107,7 @@ EXPORT_SYMBOL_GPL(kvm_x86_ops);
 #include <asm/vmx.h>
 /* OSNET-END */
 
-#if OSNET_DTID_WRMSR
+#if OSNET_DTID_WRMSR_EMULATE_TIMER
 /*  Enable the KVM to configure the LAPIC timer before the VM
  *  entry and set the PIR timer-interrupt bit and ON bit.
  */
@@ -2206,7 +2206,7 @@ int kvm_set_msr_common(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
   case MSR_IA32_APICBASE:
     return kvm_set_apic_base(vcpu, msr_info);
   case APIC_BASE_MSR ... APIC_BASE_MSR + 0x3ff:
-#if OSNET_DTID_WRMSR
+#if OSNET_DTID_WRMSR_EMULATE_TIMER
     /* Guest updates TMICT and is trapped. Please consult with
      * the Intel SDM for the TMICT MSR value.
      */
@@ -6709,7 +6709,7 @@ void kvm_arch_mmu_notifier_invalidate_page(struct kvm *kvm,
     kvm_make_all_cpus_request(kvm, KVM_REQ_APIC_PAGE_RELOAD);
 }
 
-#if OSNET_DTID_WRMSR
+#if OSNET_DTID_WRMSR_EMULATE_TIMER
 /* Assume the guest uses the one-shot or periodic timer
  * instead of the TSC dealine timer. The timer is emulated by
  * KVM. KVM converts the guest timer to the host timer based
@@ -6734,7 +6734,7 @@ static u64 osnet_lapic_emulate_timer(struct kvm_vcpu *vcpu)
   /* Compute the next-event period in clock cycles. */
   ticks = ((unsigned long long) apic->lapic_timer.period * mult) >> shift;
 
-#if OSNET_TRACE_DTID_EMULATE_TIMER
+#if OSNET_TRACE_DTID_WRMSR_EMULATE_TIMER
   trace_printk("%llu\t%llu\t%llu\n", tmict, apic->lapic_timer.period, ticks);
 #endif
 
@@ -6957,7 +6957,7 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
     vcpu->arch.switch_db_regs &= ~KVM_DEBUGREG_RELOAD;
   }
 
-#if OSNET_DTID_WRMSR
+#if OSNET_DTID_WRMSR_EMULATE_TIMER
   /* Update the LAPIC timer for the guest upon the guest's
    * WRMSR TMICT, before entering the non-root mode.
    */

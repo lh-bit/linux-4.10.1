@@ -2485,7 +2485,7 @@ static int kvm_vm_ioctl_create_vcpu(struct kvm *kvm, u32 id)
 		goto vcpu_decrement;
 	}
   
-#if OSNET_DTID_WRMSR
+#if OSNET_DTID_WRMSR_UPDATE_APIC_TIMER
   /* Update the LAPIC timer for the guest upon the guest's
    * WRMSR TMICT.
    */

@@ -270,7 +270,7 @@ struct kvm_vcpu {
 	struct kvm_vcpu_arch arch;
 	struct dentry *debugfs_dentry;
 
-#if OSNET_DTID_WRMSR
+#if OSNET_DTID_WRMSR_UPDATE_APIC_TIMER
   /* Update the LAPIC timer for the guest, before entering the
    * non-root mode.
    */
