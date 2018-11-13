@@ -18,6 +18,15 @@
 #include <asm/hw_irq.h>
 #include <asm/desc.h>
 
+/* OSNET */
+#include <asm/osnet.h>
+/* OSNET-END */
+
+#if OSNET_DTID_DO_IRQ_CLOCKEVENTS
+#include <linux/clockchips.h>
+#include "/home/tcheng8/linux-4.10.1/kernel/time/tick-internal.h"
+#endif
+
 #define CREATE_TRACE_POINTS
 #include <asm/trace/irq_vectors.h>
 
@@ -203,7 +212,6 @@ u64 arch_irq_stat(void)
 	return sum;
 }
 
-
 /*
  * do_IRQ handles all normal device IRQ's (the special
  * SMP cross-CPU interrupts have their own specific
@@ -215,6 +223,11 @@ __visible unsigned int __irq_entry do_IRQ(struct pt_regs *regs)
 	struct irq_desc * desc;
 	/* high bit used in ret_from_ code  */
 	unsigned vector = ~regs->orig_ax;
+
+#if OSNET_DTID_DO_IRQ_CLOCKEVENTS
+  struct clock_event_device *dev = __this_cpu_read(tick_cpu_device.evtdev);
+  trace_printk("0x%p\t%s\t%u\n", dev, dev->name, dev->mult);
+#endif
 
 	/*
 	 * NB: Unlike exception entries, IRQ entries do not reliably
@@ -234,6 +247,10 @@ __visible unsigned int __irq_entry do_IRQ(struct pt_regs *regs)
 	RCU_LOCKDEP_WARN(!rcu_is_watching(), "IRQ failed to wake up RCU");
 
 	desc = __this_cpu_read(vector_irq[vector]);
+
+#if OSNET_TRACE_DO_IRQ
+  trace_printk("0x%02x\t%lu\t%u\n", vector, desc->irq_data.hwirq, desc->irq_data.irq);
+#endif
 
 	if (!handle_irq(desc, regs)) {
 		ack_APIC_irq();

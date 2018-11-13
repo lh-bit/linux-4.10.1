@@ -465,7 +465,7 @@ EXPORT_SYMBOL_GPL(setup_APIC_eilvt);
 /*
  * Program the next event, relative to now
  */
-#if OSNET_HYPERCALL
+#if OSNET_DTID_HYPERCALL
 #include <asm/kvm_para.h>
 bool osnet_enable_hypercall = false;
 EXPORT_SYMBOL_GPL(osnet_enable_hypercall);
@@ -474,7 +474,7 @@ EXPORT_SYMBOL_GPL(osnet_enable_hypercall);
 static int lapic_next_event(unsigned long delta,
 			    struct clock_event_device *evt)
 {
-#if OSNET_HYPERCALL
+#if OSNET_DTID_HYPERCALL
   if (osnet_enable_hypercall) {
     kvm_hypercall0(KVM_HC_SET_PIR_ON);
   }
@@ -917,6 +917,10 @@ void setup_secondary_APIC_clock(void)
 	amd_e400_c1e_apic_setup();
 }
 
+#if OSNET_TRACE_DTID_LOCAL_APIC_TIMER_INTERRUPT
+static ktime_t osnet_apic_timer_interrupt_handler_entry_time = 0;
+#endif
+
 /*
  * The guts of the apic timer interrupt
  */
@@ -943,11 +947,18 @@ static void local_apic_timer_interrupt(void)
 		return;
 	}
 
-#if OSNET_TRACE_TIMER_EVENT_HANDLER
+#if OSNET_TRACE_LOCAL_APIC_TIMER_INTERRUPT
   /* The timer event handler switches from
    * tick_handle_periodic() to hrtimer_interrupt().
    */
-  trace_printk("%p\n", evt->event_handler);
+  trace_printk("0x%p\t%llu\t%llu\n", evt->event_handler, evt->next_event, ktime_get());
+#endif
+
+#if OSNET_TRACE_DTID_LOCAL_APIC_TIMER_INTERRUPT
+  if (osnet_apic_timer_interrupt_handler_entry_time < evt->next_event)
+    trace_printk("EARLY: %llu\t%llu\n", osnet_apic_timer_interrupt_handler_entry_time, evt->next_event);
+  else
+    trace_printk("ABOUT TIME: %llu\t%llu\n", osnet_apic_timer_interrupt_handler_entry_time, evt->next_event);
 #endif
 
 	/*
@@ -979,6 +990,11 @@ __visible void __irq_entry smp_apic_timer_interrupt(struct pt_regs *regs)
 	 * interrupt lock, which is the WrongThing (tm) to do.
 	 */
 	entering_ack_irq();
+
+#if OSNET_TRACE_DTID_LOCAL_APIC_TIMER_INTERRUPT
+  osnet_apic_timer_interrupt_handler_entry_time = ktime_get();
+#endif
+
 	local_apic_timer_interrupt();
 	exiting_irq();
 
