@@ -56,9 +56,14 @@
 #include <asm/hypervisor.h>
 
 /* OSNET */
-#include <linux/kvm_host.h>
 #include <asm/osnet.h>
 /* OSNET-END*/
+
+#if OSNET_DTID_LAPIC_TIMER_INTERRUPT_HANDLER
+#include <linux/kvm_host.h>
+#include <linux/ktime.h>
+#include <linux/hrtimer.h>
+#endif
 
 unsigned int num_processors;
 
@@ -912,12 +917,41 @@ void setup_secondary_APIC_clock(void)
  * vCPUs, when the LAPIC timer of hypervisor core fires and
  * its IRQ is invoked.
  */
-struct kvm_x86_ops *kvm_x86_ops_in_lapic = NULL;
-struct kvm *kvm_in_lapic = NULL;
+struct osnet_kvm *osnet_kvm_in_lapic = NULL;
+struct kvm_x86_ops *osnet_kvm_x86_ops_in_lapic = NULL;
 unsigned int osnet_hypervisor_core = 0;
-EXPORT_SYMBOL_GPL(kvm_x86_ops_in_lapic);
-EXPORT_SYMBOL_GPL(kvm_in_lapic);
+EXPORT_SYMBOL_GPL(osnet_kvm_in_lapic);
+EXPORT_SYMBOL_GPL(osnet_kvm_x86_ops_in_lapic);
 EXPORT_SYMBOL_GPL(osnet_hypervisor_core);
+#endif
+
+#if OSNET_DTID_HRTIMER_EMULATE_TIMER
+static enum hrtimer_restart osnet_hrtimer_restart(struct hrtimer *timer)
+{
+  ktime_t interval = ktime_set(0, MS_TO_NS(4));
+  ktime_t now = ktime_get();
+  u64 overruns = hrtimer_forward(timer, now, interval);
+
+#if OSNET_TRACE_DTID_RESTART_TIMER
+  trace_printk("%llu\t%llu\n", overruns, ktime_get());
+#endif
+  return HRTIMER_RESTART;
+}
+
+static void osnet_start_timer(struct osnet_vcpu_hrtimer *vcpu_timer)
+{
+  ktime_t period = 0;
+  struct hrtimer *timer = vcpu_timer->timer;
+
+  hrtimer_init(timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+  timer->function = &osnet_hrtimer_restart;
+  period = ktime_set(0, MS_TO_NS(4));
+  hrtimer_start(timer, period, HRTIMER_MODE_REL);
+
+#if OSNET_TRACE_DTID_START_TIMER
+  trace_printk("%s\t%llu\n", __func__, ktime_get());
+#endif
+}
 #endif
 
 /*
@@ -927,6 +961,16 @@ static void local_apic_timer_interrupt(void)
 {
 	int cpu = smp_processor_id();
 	struct clock_event_device *evt = &per_cpu(lapic_events, cpu);
+
+#if OSNET_DTID_HRTIMER_EMULATE_TIMER
+  struct osnet_kvm *osnet_kvm = NULL;
+  struct kvm_x86_ops *osnet_kvm_x86_ops = NULL;
+  if (cpu == osnet_hypervisor_core)
+  {
+    osnet_kvm = osnet_kvm_in_lapic;
+    osnet_kvm_x86_ops = osnet_kvm_x86_ops_in_lapic;
+  }
+#endif
 
 	/*
 	 * Normally we should not be here till LAPIC has been initialized but
@@ -957,19 +1001,51 @@ static void local_apic_timer_interrupt(void)
   trace_printk("%p\n", evt->event_handler);
 #endif
 
-#if OSNET_DTID_LAPIC_TIMER_INTERRUPT_HANDLER
+#if OSNET_DTID_HRTIMER_EMULATE_TIMER
+  if (cpu == osnet_hypervisor_core &&
+      osnet_kvm &&
+      osnet_kvm_x86_ops &&
+      osnet_kvm->started_timers < osnet_kvm->created_timers)
+  {
+    int i;
+#if OSNET_TRACE_DTID_START_TIMER
+    trace_printk("%d\t%d\n", osnet_kvm->started_timers,
+                             osnet_kvm->created_timers);
+#endif
+    for (i = osnet_kvm->started_timers;
+         i < osnet_kvm->created_timers;
+         i++)
+    {
+      struct osnet_vcpu_hrtimer *vcpu_timer = osnet_kvm->vcpu_timers[i];
+      if (vcpu_timer->vcpu)
+      {
+        osnet_start_timer(vcpu_timer);
+        osnet_kvm->started_timers++;
+      }
+    }
+#if OSNET_TRACE_DTID_START_TIMER
+    trace_printk("%d\t%d\n", osnet_kvm->started_timers,
+                             osnet_kvm->created_timers);
+#endif
+  }
+#endif
+
+#if OSNET_DTID_LAPIC_TIMER_INTERRUPT_HANDLER_EMULATE_TIMER
   /* Asssume the boot CPU is used to set the PIR
    * timer-interrupt bit and ON bit. For the better
    * scalability, we should consider to set up the PIR and ON
    * for the online vCPUs instead of all possible vCPUs.
    */
-  if (cpu == osnet_hypervisor_core && kvm_in_lapic && kvm_x86_ops_in_lapic)
+  if (cpu == osnet_hypervisor_core &&
+      osnet_kvm_in_lapic &&
+      osnet_kvm_x86_ops_in_lapic &&)
   {
     int i;
     for (i = 0; i < KVM_MAX_VCPUS; i++)
     {
-      struct kvm_vcpu *vcpu = kvm_in_lapic->vcpus[i];
-      if (vcpu) kvm_x86_ops_in_lapic->osnet_set_pir_on(vcpu, 0xef);
+      struct kvm *kvm = osnet_kvm_in_lapic->kvm;
+      struct kvm_vcpu *vcpu = kvm->vcpus[i];
+      if (vcpu) osnet_kvm_x86_ops_in_lapic->osnet_set_pir_on(vcpu, 0xef);
     }
   }
 #endif

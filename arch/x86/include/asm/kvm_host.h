@@ -1048,7 +1048,6 @@ struct kvm_x86_ops {
    */
   void (*osnet_trace_vmexit)(struct kvm_vcpu *vcpu, u32 exit_reason, const char *message);
 #endif
-
 };
 
 struct kvm_arch_async_pf {

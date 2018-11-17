@@ -68,12 +68,78 @@
 /* OSNET-END */
 
 #if OSNET_DTID_LAPIC_TIMER_INTERRUPT_HANDLER
-/* LAPIC timer-interrupt handler is able to set up the PIR
- * timer-interrupt bit and ON bit, when the LAPIC timer of
- * host core fires and invoke the IRQ.
+/* LAPIC timer-interrupt handler emulate the guest timer using
+ * the hrtimers. One hrtimer per vCPU running in the hard IRQ
+ * context.
  */
-extern struct kvm_x86_ops *kvm_x86_ops_in_lapic;
-extern struct kvm *kvm_in_lapic;
+#include <linux/hrtimer.h>
+
+extern struct osnet_kvm *osnet_kvm_in_lapic;
+extern struct kvm_x86_ops *osnet_kvm_x86_ops_in_lapic;
+static struct osnet_kvm *osnet_kvm;
+
+static int osnet_initialize_kvm(struct kvm *kvm)
+{
+  osnet_kvm = kmalloc(sizeof(*osnet_kvm), GFP_KERNEL);
+  if (!osnet_kvm) return -ENOMEM;
+  osnet_kvm->kvm = kvm;
+  osnet_kvm->created_timers = 0;
+  osnet_kvm->started_timers = 0;
+  osnet_kvm_in_lapic = osnet_kvm;
+  return 0;
+}
+
+#if OSNET_DTID_HRTIMER_EMULATE_TIMER
+static int osnet_create_vcpu_timer(struct kvm_vcpu *vcpu)
+{
+  int i = osnet_kvm->created_timers;
+  struct osnet_vcpu_hrtimer *vcpu_timer = NULL;
+
+  vcpu_timer = kmalloc(sizeof(*vcpu_timer), GFP_KERNEL);
+  if (!vcpu_timer) return -ENOMEM;
+
+  vcpu_timer->vcpu = vcpu;
+  vcpu_timer->timer = kmalloc(sizeof(struct hrtimer), GFP_KERNEL);
+  if (!vcpu_timer->timer) return -ENOMEM;
+
+  osnet_kvm->vcpu_timers[i] = vcpu_timer;
+  osnet_kvm->created_timers++;
+
+#if OSNET_TRACE_DTID_CREATE_VCPU_TIMER
+  trace_printk("%s\t%d\n", __func__,
+                           osnet_kvm_in_lapic->created_timers);
+#endif
+  return 0;
+}
+#endif
+
+static void osnet_destroy_kvm(void)
+{
+#if OSNET_DTID_HRTIMER_EMULATE_TIMER
+  int i;
+  for (i = 0; i < osnet_kvm->created_timers; i++)
+  {
+    struct osnet_vcpu_hrtimer *vcpu_timer = osnet_kvm->vcpu_timers[i];
+    int ret = hrtimer_cancel(vcpu_timer->timer);
+    if (ret) pr_info("timer %d was active.\n", i);
+
+    kfree(vcpu_timer->timer);
+    kfree(vcpu_timer);
+  }
+#endif
+  kfree(osnet_kvm);
+  osnet_kvm_in_lapic = NULL;
+}
+
+static void osnet_initialize_kvm_x86_ops(void *opaque)
+{
+  osnet_kvm_x86_ops_in_lapic = (struct kvm_x86_ops *) opaque;
+}
+
+static void osnet_free_kvm_x86_ops(void)
+{
+  osnet_kvm_x86_ops_in_lapic = NULL;
+}
 #endif
 
 /* Worst case buffer size needed for holding an integer. */
@@ -731,16 +797,7 @@ static void kvm_destroy_vm(struct kvm *kvm)
 	struct mm_struct *mm = kvm->mm;
 
 #if OSNET_DTID_LAPIC_TIMER_INTERRUPT_HANDLER
-  /* When the guest is destroyed, unlink the KVM from the
-   * LAPIC timer-interrupt handler.
-   */
-  if (kvm_in_lapic)
-  {
-    kvm_in_lapic = NULL;
-#if OSNET_TRACE_DTID_LAPIC_TIMER_INTERRUPT_HANLDER
-    trace_printk("Unlink the KVM from the LAPIC timer-interrupt handler.\n");
-#endif
-  }
+  osnet_destroy_kvm();
 #endif
 
 	kvm_destroy_vm_debugfs(kvm);
@@ -2484,7 +2541,7 @@ static int kvm_vm_ioctl_create_vcpu(struct kvm *kvm, u32 id)
 		r = PTR_ERR(vcpu);
 		goto vcpu_decrement;
 	}
-  
+
 #if OSNET_DTID_WRMSR_UPDATE_APIC_TIMER
   /* Update the LAPIC timer for the guest upon the guest's
    * WRMSR TMICT.
@@ -2529,6 +2586,10 @@ static int kvm_vm_ioctl_create_vcpu(struct kvm *kvm, u32 id)
 
 	mutex_unlock(&kvm->lock);
 	kvm_arch_vcpu_postcreate(vcpu);
+
+#if OSNET_DTID_HRTIMER_EMULATE_TIMER
+  osnet_create_vcpu_timer(vcpu);
+#endif
 
 	return r;
 
@@ -3234,10 +3295,7 @@ static int kvm_dev_ioctl_create_vm(unsigned long type)
 	fd_install(r, file);
 
 #if OSNET_DTID_LAPIC_TIMER_INTERRUPT_HANDLER
-  /* LAPIC timer-interrupt handler is able to retrieve the
-   * vCPUs from the KVM instance.
-   */
-  kvm_in_lapic = kvm;
+  osnet_initialize_kvm(kvm);
 #endif
 
 	return r;
@@ -3959,10 +4017,7 @@ int kvm_init(void *opaque, unsigned vcpu_size, unsigned vcpu_align,
 		goto out_fail;
 
 #if OSNET_DTID_LAPIC_TIMER_INTERRUPT_HANDLER
-  /* LAPIC timer-interrupt handler is able to set the PIR
-   * timer-interrupt bit and ON bit.
-   */
-  kvm_x86_ops_in_lapic = (struct kvm_x86_ops *) opaque;
+  osnet_initialize_kvm_x86_ops(opaque);
 #endif
 
 	/*
@@ -4066,13 +4121,7 @@ EXPORT_SYMBOL_GPL(kvm_init);
 void kvm_exit(void)
 {
 #if OSNET_DTID_LAPIC_TIMER_INTERRUPT_HANDLER
-  /* When KVM instance is terminated, unlink the KVM
-   * operations from the LAPIC timer.
-   */
-  kvm_x86_ops_in_lapic = NULL;
-#if OSNET_TRACE_DTID_LAPIC_TIMER_INTERRUPT_HANLDER
-  trace_printk("Unlink the KVM ops from LAPIC timer-interrupt handler.\n");
-#endif
+  osnet_free_kvm_x86_ops();
 #endif
 
 	debugfs_remove_recursive(kvm_debugfs_dir);
