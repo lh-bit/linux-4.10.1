@@ -97,11 +97,7 @@ static int osnet_create_vcpu_timer(struct kvm_vcpu *vcpu)
 
   vcpu_timer = kmalloc(sizeof(*vcpu_timer), GFP_KERNEL);
   if (!vcpu_timer) return -ENOMEM;
-
   vcpu_timer->vcpu = vcpu;
-  vcpu_timer->timer = kmalloc(sizeof(struct hrtimer), GFP_KERNEL);
-  if (!vcpu_timer->timer) return -ENOMEM;
-
   osnet_kvm->vcpu_timers[i] = vcpu_timer;
   osnet_kvm->created_timers++;
 
@@ -120,10 +116,8 @@ static void osnet_destroy_kvm(void)
   for (i = 0; i < osnet_kvm->created_timers; i++)
   {
     struct osnet_vcpu_hrtimer *vcpu_timer = osnet_kvm->vcpu_timers[i];
-    int ret = hrtimer_cancel(vcpu_timer->timer);
+    int ret = hrtimer_cancel(&vcpu_timer->timer);
     if (ret) pr_info("timer %d was active.\n", i);
-
-    kfree(vcpu_timer->timer);
     kfree(vcpu_timer);
   }
 #endif

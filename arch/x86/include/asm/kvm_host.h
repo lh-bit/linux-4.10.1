@@ -1040,6 +1040,11 @@ struct kvm_x86_ops {
   void (*osnet_set_pir_on)(struct kvm_vcpu *vcpu, int vector);
 #endif
 
+#if OSNET_DTID_GET_PIR
+  /* Poll until the PIR timer-interrupt bit is cleared. */
+  u32 *(*osnet_get_pir)(struct kvm_vcpu *vcpu);
+#endif
+
 #if OSNET_TRACE_VMEXIT
   /* Measure the overhead in ns between the VM exit and entry
    * due to the particular VM exit reason. If the VM exit

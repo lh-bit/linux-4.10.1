@@ -17,6 +17,7 @@
 #define OSNET_DTID_INTERCEPT_MSR_X2APIC 0
 #define OSNET_DTID_HYPERCALL 0
 #define OSNET_DTID_SYNC_PIR_VIRR 0
+#define OSNET_DTID_GET_PIR 1
 
 #define OSNET_TRACE_PRINTK 0
 #define OSNET_TRACE_CLOCKEVENT 0
@@ -30,26 +31,30 @@
 #define OSNET_TRACE_VMEXIT_SECTION 0
 #define OSNET_TRACE_TIMER_EVENT_HANDLER 0
 #define OSNET_TRACE_DTID_CREATE_VCPU_TIMER 0
-#define OSNET_TRACE_DTID_START_TIMER 1
-#define OSNET_TRACE_DTID_RESTART_TIMER 0
+#define OSNET_TRACE_DTID_HRTIMER_CREATION 0
+#define OSNET_TRACE_DTID_START_TIMER 0
+#define OSNET_TRACE_DTID_RESTART_TIMER 1
 
 #if OSNET_DTID_LAPIC_TIMER_INTERRUPT_HANDLER
-#define MS_TO_NS(x) (x * 1E6L)
+#include <linux/hrtimer.h>
+
 #define OSNET_KVM_MAX_VCPUS 288
+#define OSNET_MS_TO_NS(x) (x * 1000000L)
+#define OSNET_GUEST_HZ 250
+#define OSNET_BUFFER_NS 50000
+#define OSNET_TIMER_INTERRUPT 0xEF
 
 /* Each vCPU's timer is emulated by the host hrtimer. */
-struct osnet_vcpu_hrtimer
-{
-  struct kvm_vcpu *vcpu;
-  struct hrtimer *timer;
+struct osnet_vcpu_hrtimer {
+	struct kvm_vcpu *vcpu;
+	struct hrtimer timer;
 };
 
-struct osnet_kvm
-{
-  struct kvm *kvm;
-  struct osnet_vcpu_hrtimer *vcpu_timers[OSNET_KVM_MAX_VCPUS];
-  int created_timers;
-  int started_timers;
+struct osnet_kvm {
+	struct kvm *kvm;
+	struct osnet_vcpu_hrtimer *vcpu_timers[OSNET_KVM_MAX_VCPUS];
+	int created_timers;
+	int started_timers;
 };
 #endif
 

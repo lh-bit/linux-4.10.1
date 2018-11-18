@@ -5237,6 +5237,14 @@ static void osnet_vmx_set_pir_on(struct kvm_vcpu *vcpu, int vector)
 }
 #endif
 
+#if OSNET_DTID_GET_PIR
+u32 *osnet_vmx_get_pir(struct kvm_vcpu *vcpu)
+{
+  struct pi_desc *pi_desc = vcpu_to_pi_desc(vcpu);
+  return pi_desc->pir;
+}
+#endif
+
 #if OSNET_TRACE_VMEXIT
 /* Measure the overhead in ns between the VM exit and entry
  * due to the particular VM exit reason. If the VM exit reason
@@ -11824,6 +11832,10 @@ static struct kvm_x86_ops vmx_x86_ops __ro_after_init = {
    * through setting up the target PIR bit and ON bit.
    */
   .osnet_set_pir_on = osnet_vmx_set_pir_on,
+#endif
+
+#if OSNET_DTID_GET_PIR
+  .osnet_get_pir = osnet_vmx_get_pir,
 #endif
 
 #if OSNET_TRACE_VMEXIT

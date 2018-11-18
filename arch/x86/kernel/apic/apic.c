@@ -235,7 +235,7 @@ static int modern_apic(void)
 {
 	/* AMD systems use old APIC versions, so check the CPU */
 	if (boot_cpu_data.x86_vendor == X86_VENDOR_AMD &&
-	    boot_cpu_data.x86 >= 0xf)
+			boot_cpu_data.x86 >= 0xf)
 		return 1;
 	return lapic_get_version() >= 0x14;
 }
@@ -371,8 +371,8 @@ static void __setup_APIC_LVTT(unsigned int clocks, int oneshot, int irqen)
 	 */
 	tmp_value = apic_read(APIC_TDCR);
 	apic_write(APIC_TDCR,
-		(tmp_value & ~(APIC_TDR_DIV_1 | APIC_TDR_DIV_TMBASE)) |
-		APIC_TDR_DIV_16);
+			(tmp_value & ~(APIC_TDR_DIV_1 | APIC_TDR_DIV_TMBASE)) |
+			APIC_TDR_DIV_16);
 
 	if (!oneshot)
 		apic_write(APIC_TMICT, clocks / APIC_DIVISOR);
@@ -426,7 +426,7 @@ static unsigned int reserve_eilvt_offset(int offset, unsigned int new)
 	rsvd &= ~APIC_EILVT_MASKED;
 	if (rsvd && rsvd != vector)
 		pr_info("LVT offset %d assigned for vector 0x%02x\n",
-			offset, rsvd);
+				offset, rsvd);
 
 	return new;
 }
@@ -448,17 +448,17 @@ int setup_APIC_eilvt(u8 offset, u8 vector, u8 msg_type, u8 mask)
 
 	if (reserved != new) {
 		pr_err(FW_BUG "cpu %d, try to use APIC%lX (LVT offset %d) for "
-		       "vector 0x%x, but the register is already in use for "
-		       "vector 0x%x on another cpu\n",
-		       smp_processor_id(), reg, offset, new, reserved);
+				"vector 0x%x, but the register is already in use for "
+				"vector 0x%x on another cpu\n",
+				smp_processor_id(), reg, offset, new, reserved);
 		return -EINVAL;
 	}
 
 	if (!eilvt_entry_is_changeable(old, new)) {
 		pr_err(FW_BUG "cpu %d, try to use APIC%lX (LVT offset %d) for "
-		       "vector 0x%x, but the register is already in use for "
-		       "vector 0x%x on this cpu\n",
-		       smp_processor_id(), reg, offset, new, old);
+				"vector 0x%x, but the register is already in use for "
+				"vector 0x%x on this cpu\n",
+				smp_processor_id(), reg, offset, new, old);
 		return -EBUSY;
 	}
 
@@ -472,14 +472,14 @@ EXPORT_SYMBOL_GPL(setup_APIC_eilvt);
  * Program the next event, relative to now
  */
 static int lapic_next_event(unsigned long delta,
-			    struct clock_event_device *evt)
+		struct clock_event_device *evt)
 {
 	apic_write(APIC_TMICT, delta);
 	return 0;
 }
 
 static int lapic_next_deadline(unsigned long delta,
-			       struct clock_event_device *evt)
+		struct clock_event_device *evt)
 {
 	u64 tsc;
 
@@ -503,7 +503,7 @@ static int lapic_timer_shutdown(struct clock_event_device *evt)
 	return 0;
 }
 
-static inline int
+	static inline int
 lapic_timer_set_periodic_oneshot(struct clock_event_device *evt, bool oneshot)
 {
 	/* Lapic used as dummy for broadcast ? */
@@ -541,8 +541,8 @@ static void lapic_timer_broadcast(const struct cpumask *mask)
 static struct clock_event_device lapic_clockevent = {
 	.name			= "lapic",
 	.features		= CLOCK_EVT_FEAT_PERIODIC |
-				  CLOCK_EVT_FEAT_ONESHOT | CLOCK_EVT_FEAT_C3STOP
-				  | CLOCK_EVT_FEAT_DUMMY,
+		CLOCK_EVT_FEAT_ONESHOT | CLOCK_EVT_FEAT_C3STOP
+		| CLOCK_EVT_FEAT_DUMMY,
 	.shift			= 32,
 	.set_state_shutdown	= lapic_timer_shutdown,
 	.set_state_periodic	= lapic_timer_set_periodic,
@@ -573,11 +573,11 @@ static void setup_APIC_timer(void)
 
 	if (this_cpu_has(X86_FEATURE_TSC_DEADLINE_TIMER)) {
 		levt->features &= ~(CLOCK_EVT_FEAT_PERIODIC |
-				    CLOCK_EVT_FEAT_DUMMY);
+				CLOCK_EVT_FEAT_DUMMY);
 		levt->set_next_event = lapic_next_deadline;
 		clockevents_config_and_register(levt,
-						tsc_khz * (1000 / TSC_DIVISOR),
-						0xF, ~0UL);
+				tsc_khz * (1000 / TSC_DIVISOR),
+				0xF, ~0UL);
 	} else
 		clockevents_register_device(levt);
 }
@@ -648,25 +648,25 @@ static void __init lapic_cal_handler(struct clock_event_device *dev)
 		tsc = rdtsc();
 
 	switch (lapic_cal_loops++) {
-	case 0:
-		lapic_cal_t1 = tapic;
-		lapic_cal_tsc1 = tsc;
-		lapic_cal_pm1 = pm;
-		lapic_cal_j1 = jiffies;
-		break;
+		case 0:
+			lapic_cal_t1 = tapic;
+			lapic_cal_tsc1 = tsc;
+			lapic_cal_pm1 = pm;
+			lapic_cal_j1 = jiffies;
+			break;
 
-	case LAPIC_CAL_LOOPS:
-		lapic_cal_t2 = tapic;
-		lapic_cal_tsc2 = tsc;
-		if (pm < lapic_cal_pm1)
-			pm += ACPI_PM_OVRRUN;
-		lapic_cal_pm2 = pm;
-		lapic_cal_j2 = jiffies;
-		break;
+		case LAPIC_CAL_LOOPS:
+			lapic_cal_t2 = tapic;
+			lapic_cal_tsc2 = tsc;
+			if (pm < lapic_cal_pm1)
+				pm += ACPI_PM_OVRRUN;
+			lapic_cal_pm2 = pm;
+			lapic_cal_j2 = jiffies;
+			break;
 	}
 }
 
-static int __init
+	static int __init
 calibrate_by_pmtimer(long deltapm, long *delta, long *deltatsc)
 {
 	const long pm_100ms = PMTMR_TICKS_PER_SEC / 10;
@@ -687,7 +687,7 @@ calibrate_by_pmtimer(long deltapm, long *delta, long *deltatsc)
 	mult = clocksource_hz2mult(PMTMR_TICKS_PER_SEC, 22);
 
 	if (deltapm > (pm_100ms - pm_thresh) &&
-	    deltapm < (pm_100ms + pm_thresh)) {
+			deltapm < (pm_100ms + pm_thresh)) {
 		apic_printk(APIC_VERBOSE, "... PM-Timer result ok\n");
 		return 0;
 	}
@@ -695,13 +695,13 @@ calibrate_by_pmtimer(long deltapm, long *delta, long *deltatsc)
 	res = (((u64)deltapm) *  mult) >> 22;
 	do_div(res, 1000000);
 	pr_warning("APIC calibration not consistent "
-		   "with PM-Timer: %ldms instead of 100ms\n",(long)res);
+			"with PM-Timer: %ldms instead of 100ms\n",(long)res);
 
 	/* Correct the lapic counter value */
 	res = (((u64)(*delta)) * pm_100ms);
 	do_div(res, deltapm);
 	pr_info("APIC delta adjusted to PM-Timer: "
-		"%lu (%ld)\n", (unsigned long)res, *delta);
+			"%lu (%ld)\n", (unsigned long)res, *delta);
 	*delta = (long)res;
 
 	/* Correct the tsc counter value */
@@ -709,8 +709,8 @@ calibrate_by_pmtimer(long deltapm, long *delta, long *deltatsc)
 		res = (((u64)(*deltatsc)) * pm_100ms);
 		do_div(res, deltapm);
 		apic_printk(APIC_VERBOSE, "TSC delta adjusted to "
-					  "PM-Timer: %lu (%ld)\n",
-					(unsigned long)res, *deltatsc);
+				"PM-Timer: %lu (%ld)\n",
+				(unsigned long)res, *deltatsc);
 		*deltatsc = (long)res;
 	}
 
@@ -737,7 +737,7 @@ static int __init calibrate_APIC_clock(void)
 		apic_printk(APIC_VERBOSE, "lapic timer already calibrated %d\n",
 				lapic_timer_frequency);
 		lapic_clockevent.mult = div_sc(lapic_timer_frequency/APIC_DIVISOR,
-					TICK_NSEC, lapic_clockevent.shift);
+				TICK_NSEC, lapic_clockevent.shift);
 		lapic_clockevent.max_delta_ns =
 			clockevent_delta2ns(0x7FFFFF, &lapic_clockevent);
 		lapic_clockevent.min_delta_ns =
@@ -747,7 +747,7 @@ static int __init calibrate_APIC_clock(void)
 	}
 
 	apic_printk(APIC_VERBOSE, "Using local APIC timer interrupts.\n"
-		    "calibrating APIC timer ...\n");
+			"calibrating APIC timer ...\n");
 
 	local_irq_disable();
 
@@ -780,11 +780,11 @@ static int __init calibrate_APIC_clock(void)
 
 	/* we trust the PM based calibration if possible */
 	pm_referenced = !calibrate_by_pmtimer(lapic_cal_pm2 - lapic_cal_pm1,
-					&delta, &deltatsc);
+			&delta, &deltatsc);
 
 	/* Calculate the scaled math multiplication factor */
 	lapic_clockevent.mult = div_sc(delta, TICK_NSEC * LAPIC_CAL_LOOPS,
-				       lapic_clockevent.shift);
+			lapic_clockevent.shift);
 	lapic_clockevent.max_delta_ns =
 		clockevent_delta2ns(0x7FFFFFFF, &lapic_clockevent);
 	lapic_clockevent.min_delta_ns =
@@ -795,19 +795,19 @@ static int __init calibrate_APIC_clock(void)
 	apic_printk(APIC_VERBOSE, "..... delta %ld\n", delta);
 	apic_printk(APIC_VERBOSE, "..... mult: %u\n", lapic_clockevent.mult);
 	apic_printk(APIC_VERBOSE, "..... calibration result: %u\n",
-		    lapic_timer_frequency);
+			lapic_timer_frequency);
 
 	if (boot_cpu_has(X86_FEATURE_TSC)) {
 		apic_printk(APIC_VERBOSE, "..... CPU clock speed is "
-			    "%ld.%04ld MHz.\n",
-			    (deltatsc / LAPIC_CAL_LOOPS) / (1000000 / HZ),
-			    (deltatsc / LAPIC_CAL_LOOPS) % (1000000 / HZ));
+				"%ld.%04ld MHz.\n",
+				(deltatsc / LAPIC_CAL_LOOPS) / (1000000 / HZ),
+				(deltatsc / LAPIC_CAL_LOOPS) % (1000000 / HZ));
 	}
 
 	apic_printk(APIC_VERBOSE, "..... host bus clock speed is "
-		    "%u.%04u MHz.\n",
-		    lapic_timer_frequency / (1000000 / HZ),
-		    lapic_timer_frequency % (1000000 / HZ));
+			"%u.%04u MHz.\n",
+			lapic_timer_frequency / (1000000 / HZ),
+			lapic_timer_frequency % (1000000 / HZ));
 
 	/*
 	 * Do a sanity check on the APIC calibration result
@@ -858,7 +858,7 @@ static int __init calibrate_APIC_clock(void)
 
 	if (levt->features & CLOCK_EVT_FEAT_DUMMY) {
 		pr_warning("APIC timer disabled due to verification failure\n");
-			return -1;
+		return -1;
 	}
 
 	return 0;
@@ -896,7 +896,7 @@ void __init setup_boot_APIC_clock(void)
 
 	/*
 	 * If nmi_watchdog is set to IO_APIC, we need the
-	 * PIT/HPET going.  Otherwise register lapic as a dummy
+	 * PIT/HPET going.	Otherwise register lapic as a dummy
 	 * device.
 	 */
 	lapic_clockevent.features &= ~CLOCK_EVT_FEAT_DUMMY;
@@ -914,8 +914,7 @@ void setup_secondary_APIC_clock(void)
 
 #if OSNET_DTID_LAPIC_TIMER_INTERRUPT_HANDLER
 /* The PIR timer-interrupt bit and ON bit are set for the
- * vCPUs, when the LAPIC timer of hypervisor core fires and
- * its IRQ is invoked.
+ * vCPUs by the timer-interrupt handler of hypervisor.
  */
 struct osnet_kvm *osnet_kvm_in_lapic = NULL;
 struct kvm_x86_ops *osnet_kvm_x86_ops_in_lapic = NULL;
@@ -926,31 +925,116 @@ EXPORT_SYMBOL_GPL(osnet_hypervisor_core);
 #endif
 
 #if OSNET_DTID_HRTIMER_EMULATE_TIMER
+static ktime_t osnet_recalibrate(struct kvm_vcpu *vcpu, int vector)
+{
+	ktime_t start = 0;
+	ktime_t end = 0;
+	struct kvm_x86_ops *ops = osnet_kvm_x86_ops_in_lapic;
+	u32 *pir = ops->osnet_get_pir(vcpu);
+
+	start = ktime_get();
+	while (test_bit(vector, (unsigned long *)pir));
+	end = ktime_get();
+
+	return ktime_sub(end, start);
+}
+
+static ktime_t osnet_set_target_expiration(ktime_t buffer)
+{
+	ktime_t interval = ktime_set(0, NSEC_PER_SEC / OSNET_GUEST_HZ);
+	ktime_t wait = ktime_sub(interval, buffer);
+	ktime_t now = ktime_get();
+	return ktime_add(now, wait);
+}
+
+static struct kvm_vcpu *osnet_get_vcpu(struct hrtimer *mytimer)
+{
+	struct osnet_vcpu_hrtimer *vcpu_timer =
+		container_of(mytimer, struct osnet_vcpu_hrtimer, timer);
+	return vcpu_timer->vcpu;
+}
+
 static enum hrtimer_restart osnet_hrtimer_restart(struct hrtimer *timer)
 {
-  ktime_t interval = ktime_set(0, MS_TO_NS(4));
-  ktime_t now = ktime_get();
-  u64 overruns = hrtimer_forward(timer, now, interval);
+	ktime_t expiration = 0;
+	struct kvm_x86_ops *ops = osnet_kvm_x86_ops_in_lapic;
+	struct kvm_vcpu *vcpu = osnet_get_vcpu(timer);
 
 #if OSNET_TRACE_DTID_RESTART_TIMER
-  trace_printk("%llu\t%llu\n", overruns, ktime_get());
+	trace_printk("%llu\n", ktime_get());
 #endif
-  return HRTIMER_RESTART;
+
+	if (vcpu) {
+		ops->osnet_set_pir_on(vcpu, OSNET_TIMER_INTERRUPT);
+		osnet_recalibrate(vcpu, OSNET_TIMER_INTERRUPT);
+	}
+	//expiration = osnet_set_target_expiration(OSNET_BUFFER_NS);
+	expiration = osnet_set_target_expiration(0);
+	hrtimer_start(timer, expiration, HRTIMER_MODE_ABS_PINNED);
+
+#if 0
+	trace_printk("%d\t%llu\t%llu\t%llu\n",
+			vcpu->vcpu_id, poll_time, expiration, ktime_get());
+#endif
+	return HRTIMER_NORESTART;
 }
 
 static void osnet_start_timer(struct osnet_vcpu_hrtimer *vcpu_timer)
 {
-  ktime_t period = 0;
-  struct hrtimer *timer = vcpu_timer->timer;
+	ktime_t expiration = 0;
+	struct hrtimer *timer = &vcpu_timer->timer;
 
-  hrtimer_init(timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-  timer->function = &osnet_hrtimer_restart;
-  period = ktime_set(0, MS_TO_NS(4));
-  hrtimer_start(timer, period, HRTIMER_MODE_REL);
+	hrtimer_init(timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS_PINNED);
+	timer->function = &osnet_hrtimer_restart;
+	expiration = osnet_set_target_expiration(0);
+	hrtimer_start(timer, expiration, HRTIMER_MODE_ABS_PINNED);
 
 #if OSNET_TRACE_DTID_START_TIMER
-  trace_printk("%s\t%llu\n", __func__, ktime_get());
+	trace_printk("%s\t%llu\n", __func__, ktime_get());
 #endif
+}
+
+static void osnet_hrtimer_emulate_guest_timer(void)
+{
+	struct osnet_kvm *osnet_kvm = osnet_kvm_in_lapic;
+	struct kvm_x86_ops *ops = osnet_kvm_x86_ops_in_lapic;
+
+	if (osnet_kvm && ops) {
+		int created_timers = osnet_kvm->created_timers;
+		int started_timers = osnet_kvm->started_timers;
+		if (started_timers < created_timers) {
+			int i;
+			for (i = started_timers; i < created_timers; i++) {
+				struct osnet_vcpu_hrtimer *vcpu_timer = osnet_kvm->vcpu_timers[i];
+				if (vcpu_timer->vcpu) {
+					osnet_start_timer(vcpu_timer);
+					osnet_kvm->started_timers++;
+				}
+			}
+		}
+#if OSNET_TRACE_DTID_HRTIMER_CREATION
+		trace_printk("%s\t%d\t%d\n", __func__, started_timers, created_timers);
+#endif
+	}
+}
+#endif
+
+#if OSNET_DTID_LAPIC_TIMER_INTERRUPT_HANDLER_EMULATE_TIMER
+void osnet_emulate_guest_timer(void)
+{
+	/* Asssume the boot CPU is used to set the PIR
+	 * timer-interrupt bit and ON bit. For the better
+	 * scalability, we should consider to set up the PIR and ON
+	 * for the online vCPUs instead of all possible vCPUs.
+	 */
+	if (osnet_kvm_in_lapic && osnet_kvm_x86_ops_in_lapic) {
+		int i;
+		for (i = 0; i < KVM_MAX_VCPUS; i++) {
+			struct kvm *kvm = osnet_kvm_in_lapic->kvm;
+			struct kvm_vcpu *vcpu = kvm->vcpus[i];
+			if (vcpu) osnet_kvm_x86_ops_in_lapic->osnet_set_pir_on(vcpu, 0xef);
+		}
+	}
 }
 #endif
 
@@ -961,16 +1045,6 @@ static void local_apic_timer_interrupt(void)
 {
 	int cpu = smp_processor_id();
 	struct clock_event_device *evt = &per_cpu(lapic_events, cpu);
-
-#if OSNET_DTID_HRTIMER_EMULATE_TIMER
-  struct osnet_kvm *osnet_kvm = NULL;
-  struct kvm_x86_ops *osnet_kvm_x86_ops = NULL;
-  if (cpu == osnet_hypervisor_core)
-  {
-    osnet_kvm = osnet_kvm_in_lapic;
-    osnet_kvm_x86_ops = osnet_kvm_x86_ops_in_lapic;
-  }
-#endif
 
 	/*
 	 * Normally we should not be here till LAPIC has been initialized but
@@ -998,56 +1072,15 @@ static void local_apic_timer_interrupt(void)
 	evt->event_handler(evt);
 
 #if OSNET_TRACE_TIMER_EVENT_HANDLER
-  trace_printk("%p\n", evt->event_handler);
+	if (cpu == osnet_hypervisor_core) trace_printk("%p\n", evt->event_handler);
 #endif
 
 #if OSNET_DTID_HRTIMER_EMULATE_TIMER
-  if (cpu == osnet_hypervisor_core &&
-      osnet_kvm &&
-      osnet_kvm_x86_ops &&
-      osnet_kvm->started_timers < osnet_kvm->created_timers)
-  {
-    int i;
-#if OSNET_TRACE_DTID_START_TIMER
-    trace_printk("%d\t%d\n", osnet_kvm->started_timers,
-                             osnet_kvm->created_timers);
-#endif
-    for (i = osnet_kvm->started_timers;
-         i < osnet_kvm->created_timers;
-         i++)
-    {
-      struct osnet_vcpu_hrtimer *vcpu_timer = osnet_kvm->vcpu_timers[i];
-      if (vcpu_timer->vcpu)
-      {
-        osnet_start_timer(vcpu_timer);
-        osnet_kvm->started_timers++;
-      }
-    }
-#if OSNET_TRACE_DTID_START_TIMER
-    trace_printk("%d\t%d\n", osnet_kvm->started_timers,
-                             osnet_kvm->created_timers);
-#endif
-  }
+	if (cpu == osnet_hypervisor_core) osnet_hrtimer_emulate_guest_timer();
 #endif
 
 #if OSNET_DTID_LAPIC_TIMER_INTERRUPT_HANDLER_EMULATE_TIMER
-  /* Asssume the boot CPU is used to set the PIR
-   * timer-interrupt bit and ON bit. For the better
-   * scalability, we should consider to set up the PIR and ON
-   * for the online vCPUs instead of all possible vCPUs.
-   */
-  if (cpu == osnet_hypervisor_core &&
-      osnet_kvm_in_lapic &&
-      osnet_kvm_x86_ops_in_lapic &&)
-  {
-    int i;
-    for (i = 0; i < KVM_MAX_VCPUS; i++)
-    {
-      struct kvm *kvm = osnet_kvm_in_lapic->kvm;
-      struct kvm_vcpu *vcpu = kvm->vcpus[i];
-      if (vcpu) osnet_kvm_x86_ops_in_lapic->osnet_set_pir_on(vcpu, 0xef);
-    }
-  }
+	if (cpu == onset_hypervisor_core) osnet_emulate_guest_timer();
 #endif
 }
 
@@ -1057,7 +1090,7 @@ static void local_apic_timer_interrupt(void)
  * broadcast interrupts too. [in case the hw doesn't support APIC timers]
  *
  * [ if a single-CPU system runs an SMP kernel then we call the local
- *   interrupt as well. Thus we cannot inline the local irq ... ]
+ *	 interrupt as well. Thus we cannot inline the local irq ... ]
  */
 __visible void __irq_entry smp_apic_timer_interrupt(struct pt_regs *regs)
 {
@@ -1296,7 +1329,7 @@ void __init init_bsp_APIC(void)
 #ifdef CONFIG_X86_32
 	/* This bit is reserved on P4/Xeon and should be cleared */
 	if ((boot_cpu_data.x86_vendor == X86_VENDOR_INTEL) &&
-	    (boot_cpu_data.x86 == 15))
+			(boot_cpu_data.x86 == 15))
 		value &= ~APIC_SPIV_FOCUS_DISABLED;
 	else
 #endif
@@ -1353,8 +1386,8 @@ static void lapic_setup_esr(void)
 	value = apic_read(APIC_ESR);
 	if (value != oldvalue)
 		apic_printk(APIC_VERBOSE, "ESR value before enabling "
-			"vector: 0x%08x  after: 0x%08x\n",
-			oldvalue, value);
+				"vector: 0x%08x  after: 0x%08x\n",
+				oldvalue, value);
 }
 
 /**
@@ -1451,7 +1484,7 @@ void setup_local_APIC(void)
 		}
 		if (acked > 256) {
 			printk(KERN_ERR "LAPIC pending interrupts after %d EOI\n",
-			       acked);
+					acked);
 			break;
 		}
 		if (queued) {
@@ -1485,8 +1518,8 @@ void setup_local_APIC(void)
 	 * away, oh well :-(
 	 *
 	 * [ This bug can be reproduced easily with a level-triggered
-	 *   PCI Ne2000 networking cards and PII/PIII processors, dual
-	 *   BX chipset. ]
+	 *	 PCI Ne2000 networking cards and PII/PIII processors, dual
+	 *	 BX chipset. ]
 	 */
 	/*
 	 * Actually disabling the focus CPU check just makes the hang less
@@ -1497,7 +1530,7 @@ void setup_local_APIC(void)
 	/*
 	 * - enable focus processor (bit==0)
 	 * - 64bit mode always use processor focus
-	 *   so no need to set it
+	 *	 so no need to set it
 	 */
 	value &= ~APIC_SPIV_FOCUS_DISABLED;
 #endif
@@ -1533,7 +1566,7 @@ void setup_local_APIC(void)
 	 * modified by apic_extnmi= boot option.
 	 */
 	if ((!cpu && apic_extnmi != APIC_EXTNMI_NONE) ||
-	    apic_extnmi == APIC_EXTNMI_ALL)
+			apic_extnmi == APIC_EXTNMI_ALL)
 		value = APIC_DM_NMI;
 	else
 		value = APIC_DM_NMI | APIC_LVT_MASKED;
@@ -1618,7 +1651,7 @@ static int __init setup_nox2apic(char *str)
 
 		if (apicid >= 255) {
 			pr_warning("Apicid: %08x, cannot enforce nox2apic\n",
-				   apicid);
+					apicid);
 			return 0;
 		}
 		pr_warning("x2apic already enabled.\n");
@@ -1683,7 +1716,7 @@ static __init void try_to_enable_x2apic(int remap_mode)
 		 * under KVM
 		 */
 		if (max_physical_apicid > 255 ||
-		    !hypervisor_x2apic_available()) {
+				!hypervisor_x2apic_available()) {
 			pr_info("x2apic: IRQ remapping doesn't support X2APIC mode\n");
 			x2apic_disable();
 			return;
@@ -1850,18 +1883,18 @@ static int __init detect_init_APIC(void)
 		return -1;
 
 	switch (boot_cpu_data.x86_vendor) {
-	case X86_VENDOR_AMD:
-		if ((boot_cpu_data.x86 == 6 && boot_cpu_data.x86_model > 1) ||
-		    (boot_cpu_data.x86 >= 15))
-			break;
-		goto no_apic;
-	case X86_VENDOR_INTEL:
-		if (boot_cpu_data.x86 == 6 || boot_cpu_data.x86 == 15 ||
-		    (boot_cpu_data.x86 == 5 && boot_cpu_has(X86_FEATURE_APIC)))
-			break;
-		goto no_apic;
-	default:
-		goto no_apic;
+		case X86_VENDOR_AMD:
+			if ((boot_cpu_data.x86 == 6 && boot_cpu_data.x86_model > 1) ||
+					(boot_cpu_data.x86 >= 15))
+				break;
+			goto no_apic;
+		case X86_VENDOR_INTEL:
+			if (boot_cpu_data.x86 == 6 || boot_cpu_data.x86 == 15 ||
+					(boot_cpu_data.x86 == 5 && boot_cpu_has(X86_FEATURE_APIC)))
+				break;
+			goto no_apic;
+		default:
+			goto no_apic;
 	}
 
 	if (!boot_cpu_has(X86_FEATURE_APIC)) {
@@ -1871,7 +1904,7 @@ static int __init detect_init_APIC(void)
 		 */
 		if (!force_enable_local_apic) {
 			pr_info("Local APIC disabled by BIOS -- "
-				"you can enable it with \"lapic\"\n");
+					"you can enable it with \"lapic\"\n");
 			return -1;
 		}
 		if (apic_force_enable(APIC_DEFAULT_PHYS_BASE))
@@ -1944,7 +1977,7 @@ void __init register_lapic_address(unsigned long address)
 	if (!x2apic_mode) {
 		set_fixmap_nocache(FIX_APIC_BASE, address);
 		apic_printk(APIC_VERBOSE, "mapped APIC to %16lx (%16lx)\n",
-			    APIC_BASE, address);
+				APIC_BASE, address);
 	}
 	if (boot_cpu_physical_apicid == -1U) {
 		boot_cpu_physical_apicid  = read_apic_id();
@@ -1976,7 +2009,7 @@ static void __smp_spurious_interrupt(u8 vector)
 
 	/* see sw-dev-man vol 3, chapter 7.4.13.5 */
 	pr_info("spurious APIC interrupt through vector %02x on CPU#%d, "
-		"should never happen.\n", vector, smp_processor_id());
+			"should never happen.\n", vector, smp_processor_id());
 }
 
 __visible void smp_spurious_interrupt(struct pt_regs *regs)
@@ -2023,7 +2056,7 @@ static void __smp_error_interrupt(struct pt_regs *regs)
 	atomic_inc(&irq_err_count);
 
 	apic_printk(APIC_DEBUG, KERN_DEBUG "APIC error on CPU%d: %02x",
-		    smp_processor_id(), v);
+			smp_processor_id(), v);
 
 	v &= 0xff;
 	while (v) {
@@ -2091,7 +2124,7 @@ void disconnect_bsp_APIC(int virt_wire_setup)
 		/*
 		 * Put the board back into PIC mode (has an effect only on
 		 * certain older boards).  Note that APIC interrupts, including
-		 * IPIs, won't work beyond this point!  The only exception are
+		 * IPIs, won't work beyond this point!	The only exception are
 		 * INIT IPIs.
 		 */
 		apic_printk(APIC_VERBOSE, "disabling APIC mode, "
@@ -2117,8 +2150,8 @@ void disconnect_bsp_APIC(int virt_wire_setup)
 		 */
 		value = apic_read(APIC_LVT0);
 		value &= ~(APIC_MODE_MASK | APIC_SEND_PENDING |
-			APIC_INPUT_POLARITY | APIC_LVT_REMOTE_IRR |
-			APIC_LVT_LEVEL_TRIGGER | APIC_LVT_MASKED);
+				APIC_INPUT_POLARITY | APIC_LVT_REMOTE_IRR |
+				APIC_LVT_LEVEL_TRIGGER | APIC_LVT_MASKED);
 		value |= APIC_LVT_REMOTE_IRR | APIC_SEND_PENDING;
 		value = SET_APIC_DELIVERY_MODE(value, APIC_MODE_EXTINT);
 		apic_write(APIC_LVT0, value);
@@ -2177,8 +2210,8 @@ static int allocate_logical_cpuid(int apicid)
 	/* Allocate a new cpuid. */
 	if (nr_logical_cpuids >= nr_cpu_ids) {
 		WARN_ONCE(1, "Only %d processors supported."
-			     "Processor %d/0x%x and the rest are ignored.\n",
-			     nr_cpu_ids - 1, nr_logical_cpuids, apicid);
+				"Processor %d/0x%x and the rest are ignored.\n",
+				nr_cpu_ids - 1, nr_logical_cpuids, apicid);
 		return -1;
 	}
 
@@ -2190,7 +2223,7 @@ int __generic_processor_info(int apicid, int version, bool enabled)
 {
 	int cpu, max = nr_cpu_ids;
 	bool boot_cpu_detected = physid_isset(boot_cpu_physical_apicid,
-				phys_cpu_present_map);
+			phys_cpu_present_map);
 
 	/*
 	 * boot_cpu_physical_apicid is designed to have the apicid
@@ -2212,13 +2245,13 @@ int __generic_processor_info(int apicid, int version, bool enabled)
 	 * function, generic_processor_info().
 	 */
 	if (disabled_cpu_apicid != BAD_APICID &&
-	    disabled_cpu_apicid != read_apic_id() &&
-	    disabled_cpu_apicid == apicid) {
+			disabled_cpu_apicid != read_apic_id() &&
+			disabled_cpu_apicid == apicid) {
 		int thiscpu = num_processors + disabled_cpus;
 
 		pr_warning("APIC: Disabling requested cpu."
-			   " Processor %d/0x%x ignored.\n",
-			   thiscpu, apicid);
+				" Processor %d/0x%x ignored.\n",
+				thiscpu, apicid);
 
 		disabled_cpus++;
 		return -ENODEV;
@@ -2229,13 +2262,13 @@ int __generic_processor_info(int apicid, int version, bool enabled)
 	 * nr_cpu_ids - 1 processors and keep one slot free for boot cpu
 	 */
 	if (!boot_cpu_detected && num_processors >= nr_cpu_ids - 1 &&
-	    apicid != boot_cpu_physical_apicid) {
+			apicid != boot_cpu_physical_apicid) {
 		int thiscpu = max + disabled_cpus - 1;
 
 		pr_warning(
-			"APIC: NR_CPUS/possible_cpus limit of %i almost"
-			" reached. Keeping one slot for boot cpu."
-			"  Processor %d/0x%x ignored.\n", max, thiscpu, apicid);
+				"APIC: NR_CPUS/possible_cpus limit of %i almost"
+				" reached. Keeping one slot for boot cpu."
+				"  Processor %d/0x%x ignored.\n", max, thiscpu, apicid);
 
 		disabled_cpus++;
 		return -ENODEV;
@@ -2246,8 +2279,8 @@ int __generic_processor_info(int apicid, int version, bool enabled)
 
 		if (enabled) {
 			pr_warning("APIC: NR_CPUS/possible_cpus limit of %i "
-				   "reached. Processor %d/0x%x ignored.\n",
-				   max, thiscpu, apicid);
+					"reached. Processor %d/0x%x ignored.\n",
+					max, thiscpu, apicid);
 		}
 
 		disabled_cpus++;
@@ -2279,13 +2312,13 @@ int __generic_processor_info(int apicid, int version, bool enabled)
 	 */
 	if (version == 0x0) {
 		pr_warning("BIOS bug: APIC version is 0 for CPU %d/0x%x, fixing up to 0x10\n",
-			   cpu, apicid);
+				cpu, apicid);
 		version = 0x10;
 	}
 
 	if (version != boot_cpu_apic_version) {
 		pr_warning("BIOS bug: APIC version mismatch, boot CPU: %x, CPU %d: version %x\n",
-			boot_cpu_apic_version, cpu, version);
+				boot_cpu_apic_version, cpu, version);
 	}
 
 	if (apicid > max_physical_apicid)
@@ -2333,8 +2366,8 @@ void default_init_apic_ldr(void)
 }
 
 int default_cpu_mask_to_apicid_and(const struct cpumask *cpumask,
-				   const struct cpumask *andmask,
-				   unsigned int *apicid)
+		const struct cpumask *andmask,
+		unsigned int *apicid)
 {
 	unsigned int cpu;
 
@@ -2440,9 +2473,9 @@ int __init APIC_init_uniprocessor(void)
 	 * Complain if the BIOS pretends there is one.
 	 */
 	if (!boot_cpu_has(X86_FEATURE_APIC) &&
-	    APIC_INTEGRATED(boot_cpu_apic_version)) {
+			APIC_INTEGRATED(boot_cpu_apic_version)) {
 		pr_err("BIOS bug, local APIC 0x%x not detected!...\n",
-			boot_cpu_physical_apicid);
+				boot_cpu_physical_apicid);
 		return -1;
 	}
 #endif
@@ -2740,7 +2773,7 @@ static int __init apic_set_verbosity(char *arg)
 		apic_verbosity = APIC_VERBOSE;
 	else {
 		pr_warning("APIC Verbosity level %s not recognised"
-			" use apic=verbose or apic=debug\n", arg);
+				" use apic=verbose or apic=debug\n", arg);
 		return -EINVAL;
 	}
 
