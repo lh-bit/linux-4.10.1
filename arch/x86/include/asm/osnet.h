@@ -9,15 +9,16 @@
 #define OSNET_VMCS_WRITE64 1
 #define OSNET_HLT 1
 #define OSNET_DTID_SET_PIR_ON 1
-#define OSNET_DTID_LAPIC_TIMER_INTERRUPT_HANDLER 1
-#define OSNET_DTID_LAPIC_TIMER_INTERRUPT_HANDLER_EMULATE_TIMER 0
-#define OSNET_DTID_HRTIMER_EMULATE_TIMER 1
-#define OSNET_DTID_WRMSR_EMULATE_TIMER 0
-#define OSNET_DTID_WRMSR_UPDATE_APIC_TIMER 0
-#define OSNET_DTID_INTERCEPT_MSR_X2APIC 0
-#define OSNET_DTID_HYPERCALL 0
-#define OSNET_DTID_SYNC_PIR_VIRR 0
+#define OSNET_DTID_SYNC_PIR_VIRR 1
 #define OSNET_DTID_GET_PIR 1
+#define OSNET_DTID_INTERCEPT_MSR_X2APIC 0
+
+#define OSNET_DTID_LAPIC_TIMER_INTERRUPT_HANDLER 1
+#define OSNET_DTID_LAPIC_TIMER_EMULATE_TIMER 0
+#define OSNET_DTID_HRTIMER_EMULATE_TIMER 1
+#define OSNET_DTID_WRMSR_EMULATE_TIMER 1
+#define OSNET_DTID_WRMSR_UPDATE_APIC_TIMER 1
+#define OSNET_DTID_HYPERCALL 0
 
 #define OSNET_TRACE_PRINTK 0
 #define OSNET_TRACE_CLOCKEVENT 0
@@ -31,9 +32,9 @@
 #define OSNET_TRACE_VMEXIT_SECTION 0
 #define OSNET_TRACE_TIMER_EVENT_HANDLER 0
 #define OSNET_TRACE_DTID_CREATE_VCPU_TIMER 0
-#define OSNET_TRACE_DTID_HRTIMER_CREATION 0
-#define OSNET_TRACE_DTID_START_TIMER 0
-#define OSNET_TRACE_DTID_RESTART_TIMER 1
+#define OSNET_TRACE_DTID_RESTART_TIMER 0
+#define OSNET_TRACE_DTID_CALIBRATE_POLL_TIME 0
+#define OSNET_TRACE_DTID_LAPIC_TIMER_EMULATE_GUEST_TIMER 0
 
 #if OSNET_DTID_LAPIC_TIMER_INTERRUPT_HANDLER
 #include <linux/hrtimer.h>
@@ -43,18 +44,19 @@
 #define OSNET_GUEST_HZ 250
 #define OSNET_BUFFER_NS 50000
 #define OSNET_TIMER_INTERRUPT 0xEF
+#define OSNET_NSEC_BEFORE_DEADLINE 20000
 
 /* Each vCPU's timer is emulated by the host hrtimer. */
 struct osnet_vcpu_hrtimer {
-	struct kvm_vcpu *vcpu;
-	struct hrtimer timer;
+    struct kvm_vcpu *vcpu;
+    struct hrtimer timer;
 };
 
 struct osnet_kvm {
-	struct kvm *kvm;
-	struct osnet_vcpu_hrtimer *vcpu_timers[OSNET_KVM_MAX_VCPUS];
-	int created_timers;
-	int started_timers;
+    struct kvm *kvm;
+    struct osnet_vcpu_hrtimer *vcpu_timers[OSNET_KVM_MAX_VCPUS];
+    int created_timers;
+    int started_timers;
 };
 #endif
 
