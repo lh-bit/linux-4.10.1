@@ -52,6 +52,10 @@
 #include "trace.h"
 #include "pmu.h"
 
+/* OSNET */
+#include <asm/osnet.h>
+/* OSNET-END */
+
 #define __ex(x) __kvm_handle_fault_on_reboot(x)
 #define __ex_clear(x, reg) \
 	____kvm_handle_fault_on_reboot(x, "xor " reg " , " reg)
@@ -622,8 +626,11 @@ struct vcpu_vmx {
 	u32 exit_reason;
 
 	/* Posted interrupt descriptor */
-	struct pi_desc pi_desc;
-
+#if OSNET_DTID_PI_DESC
+        struct pi_desc *pi_desc;
+#else
+        struct pi_desc pi_desc;
+#endif
 	/* Support for a guest hypervisor (nested VMX) */
 	struct nested_vmx nested;
 
@@ -669,7 +676,11 @@ static inline struct vcpu_vmx *to_vmx(struct kvm_vcpu *vcpu)
 
 static struct pi_desc *vcpu_to_pi_desc(struct kvm_vcpu *vcpu)
 {
-	return &(to_vmx(vcpu)->pi_desc);
+#if OSNET_DTID_PI_DESC
+        return to_vmx(vcpu)->pi_desc;
+#else
+        return &(to_vmx(vcpu)->pi_desc);
+#endif
 }
 
 #define VMCS12_OFFSET(x) offsetof(struct vmcs12, x)
@@ -5008,8 +5019,11 @@ static inline bool kvm_vcpu_trigger_posted_interrupt(struct kvm_vcpu *vcpu)
 		 * case when 'SN' is set currently, warning if
 		 * 'SN' is set.
 		 */
-		WARN_ON_ONCE(pi_test_sn(&vmx->pi_desc));
-
+#if OSNET_DTID_PI_DESC
+                WARN_ON_ONCE(pi_test_sn(vmx->pi_desc));
+#else
+                WARN_ON_ONCE(pi_test_sn(&vmx->pi_desc));
+#endif
 		apic->send_IPI_mask(get_cpu_mask(vcpu->cpu),
 				POSTED_INTR_VECTOR);
 		return true;
@@ -5052,11 +5066,17 @@ static void vmx_deliver_posted_interrupt(struct kvm_vcpu *vcpu, int vector)
 	r = vmx_deliver_nested_posted_interrupt(vcpu, vector);
 	if (!r)
 		return;
+#if OSNET_DTID_PI_DESC
+        if (pi_test_and_set_pir(vector, vmx->pi_desc))
+                return;
 
-	if (pi_test_and_set_pir(vector, &vmx->pi_desc))
-		return;
+        r = pi_test_and_set_on(vmx->pi_desc);
+#else
+        if (pi_test_and_set_pir(vector, &vmx->pi_desc))
+                return;
 
-	r = pi_test_and_set_on(&vmx->pi_desc);
+        r = pi_test_and_set_on(&vmx->pi_desc);
+#endif
 	kvm_make_request(KVM_REQ_EVENT, vcpu);
 	if (r || !kvm_vcpu_trigger_posted_interrupt(vcpu))
 		kvm_vcpu_kick(vcpu);
@@ -5065,7 +5085,18 @@ static void vmx_deliver_posted_interrupt(struct kvm_vcpu *vcpu, int vector)
 static void vmx_sync_pir_to_irr(struct kvm_vcpu *vcpu)
 {
 	struct vcpu_vmx *vmx = to_vmx(vcpu);
+#if OSNET_DTID_PI_DESC
+        if (!pi_test_on(vmx->pi_desc))
+                return;
 
+        pi_clear_on(vmx->pi_desc);
+        /*
+         * IOMMU can write to PIR.ON, so the barrier matters even on UP.
+         * But on x86 this is just a compiler barrier anyway.
+         */
+        smp_mb__after_atomic();
+        kvm_apic_update_irr(vcpu, vmx->pi_desc->pir);
+#else
 	if (!pi_test_on(&vmx->pi_desc))
 		return;
 
@@ -5076,6 +5107,7 @@ static void vmx_sync_pir_to_irr(struct kvm_vcpu *vcpu)
 	 */
 	smp_mb__after_atomic();
 	kvm_apic_update_irr(vcpu, vmx->pi_desc.pir);
+#endif
 }
 
 /*
@@ -5286,7 +5318,11 @@ static int vmx_vcpu_setup(struct vcpu_vmx *vmx)
 		vmcs_write16(GUEST_INTR_STATUS, 0);
 
 		vmcs_write16(POSTED_INTR_NV, POSTED_INTR_VECTOR);
-		vmcs_write64(POSTED_INTR_DESC_ADDR, __pa((&vmx->pi_desc)));
+#if OSNET_DTID_PI_DESC
+                vmcs_write64(POSTED_INTR_DESC_ADDR, __pa((vmx->pi_desc)));
+#else
+                vmcs_write64(POSTED_INTR_DESC_ADDR, __pa((&vmx->pi_desc)));
+#endif
 	}
 
 	if (ple_gap) {
@@ -5434,10 +5470,13 @@ static void vmx_vcpu_reset(struct kvm_vcpu *vcpu, bool init_event)
 	}
 
 	kvm_make_request(KVM_REQ_APIC_PAGE_RELOAD, vcpu);
-
-	if (kvm_vcpu_apicv_active(vcpu))
-		memset(&vmx->pi_desc, 0, sizeof(struct pi_desc));
-
+#if OSNET_DTID_PI_DESC
+        if (kvm_vcpu_apicv_active(vcpu))
+                memset(vmx->pi_desc, 0, sizeof(struct pi_desc));
+#else
+        if (kvm_vcpu_apicv_active(vcpu))
+                memset(&vmx->pi_desc, 0, sizeof(struct pi_desc));
+#endif
 	if (vmx->vpid != 0)
 		vmcs_write16(VIRTUAL_PROCESSOR_ID, vmx->vpid);
 
@@ -9238,6 +9277,21 @@ static void vmx_free_vcpu(struct kvm_vcpu *vcpu)
 	kmem_cache_free(kvm_vcpu_cache, vmx);
 }
 
+#if OSNET_DTID_PI_DESC
+static void osnet_vmx_init_pid(struct kvm *kvm, struct vcpu_vmx *vmx,
+                               unsigned int id)
+{
+        unsigned int i = kvm->osnet_pid.size;
+        unsigned long pid = get_zeroed_page(GFP_KERNEL);
+        struct osnet_pid_pte *entry = &kvm->osnet_pid.pid_pte[i];
+
+        vmx->pi_desc = (struct pi_desc*) pid;
+        entry->pid = pid;
+        kvm->osnet_pid.hash[id] = i;
+        kvm->osnet_pid.size++;
+}
+#endif
+
 static struct kvm_vcpu *vmx_create_vcpu(struct kvm *kvm, unsigned int id)
 {
 	int err;
@@ -9246,7 +9300,9 @@ static struct kvm_vcpu *vmx_create_vcpu(struct kvm *kvm, unsigned int id)
 
 	if (!vmx)
 		return ERR_PTR(-ENOMEM);
-
+#if OSNET_DTID_PI_DESC
+        osnet_vmx_init_pid(kvm, vmx, id);
+#endif
 	vmx->vpid = allocate_vpid();
 
 	err = kvm_vcpu_init(&vmx->vcpu, kvm, id);
@@ -10267,7 +10323,7 @@ static int prepare_vmcs02(struct kvm_vcpu *vcpu, struct vmcs12 *vmcs12,
 	/* vmcs12's VM_ENTRY_LOAD_IA32_EFER and VM_ENTRY_IA32E_MODE are
 	 * emulated by vmx_set_efer(), below.
 	 */
-	vm_entry_controls_init(vmx, 
+	vm_entry_controls_init(vmx,
 		(vmcs12->vm_entry_controls & ~VM_ENTRY_LOAD_IA32_EFER &
 			~VM_ENTRY_IA32E_MODE) |
 		(vmcs_config.vmentry_ctrl & ~VM_ENTRY_IA32E_MODE));
@@ -11497,6 +11553,74 @@ static void vmx_setup_mce(struct kvm_vcpu *vcpu)
 			~FEATURE_CONTROL_LMCE;
 }
 
+#if OSNET_CONFIGURE_VMCS
+static u32 osnet_get_vmx_pin_based_exec_ctrl(struct kvm_vcpu *vcpu)
+{
+        struct vcpu_vmx *vmx = to_vmx(vcpu);
+        return vmx_pin_based_exec_ctrl(vmx);
+}
+
+static u32 osnet_get_vmx_cpu_exec_ctrl(struct kvm_vcpu *vcpu)
+{
+        struct vcpu_vmx *vmx = to_vmx(vcpu);
+        return vmx_exec_control(vmx);
+}
+
+static u32 osnet_get_vmx_secondary_exec_ctrl(struct kvm_vcpu *vcpu)
+{
+        struct vcpu_vmx *vmx = to_vmx(vcpu);
+        return vmx_secondary_exec_control(vmx);
+}
+#endif
+
+#if OSNET_CONFIGURE_MSR_BITMAP
+static void __osnet_vmx_enable_intercept_for_msr(unsigned long *msr_bitmap,
+                                                 u32 msr, int type)
+{
+        int f = sizeof(unsigned long);
+
+        if (!cpu_has_vmx_msr_bitmap())
+                return;
+
+        if (msr <= 0x1fff) {
+                if (type & MSR_TYPE_R)
+                        /* read-low */
+                        __set_bit(msr, msr_bitmap + 0x000 / f);
+
+                if (type & MSR_TYPE_W)
+                        /* write-low */
+                        __set_bit(msr, msr_bitmap + 0x800 / f);
+
+        } else if ((msr >= 0xc0000000) && (msr <= 0xc0001fff)) {
+                msr &= 0x1fff;
+                if (type & MSR_TYPE_R)
+                        /* read-high */
+                        __set_bit(msr, msr_bitmap + 0x400 / f);
+
+                if (type & MSR_TYPE_W)
+                        /* write-high */
+                        __set_bit(msr, msr_bitmap + 0xc00 / f);
+        }
+}
+
+static void osnet_vmx_enable_intercept_msr_x2apic(u32 msr, int type,
+                                                  bool apicv_active)
+{
+        if (apicv_active) {
+                __osnet_vmx_enable_intercept_for_msr(
+                                vmx_msr_bitmap_legacy_x2apic_apicv, msr, type);
+                __osnet_vmx_enable_intercept_for_msr(
+                                vmx_msr_bitmap_longmode_x2apic_apicv, msr, type);
+        }
+        else {
+                __osnet_vmx_enable_intercept_for_msr(
+                                vmx_msr_bitmap_legacy_x2apic, msr, type);
+                __osnet_vmx_enable_intercept_for_msr(
+                                vmx_msr_bitmap_longmode_x2apic, msr, type);
+        }
+}
+#endif
+
 static struct kvm_x86_ops vmx_x86_ops __ro_after_init = {
 	.cpu_has_kvm_support = cpu_has_kvm_support,
 	.disabled_by_bios = vmx_disabled_by_bios,
@@ -11625,6 +11749,19 @@ static struct kvm_x86_ops vmx_x86_ops __ro_after_init = {
 #endif
 
 	.setup_mce = vmx_setup_mce,
+#if OSNET_CONFIGURE_VMCS
+        .get_pin_based_exec_ctrl = osnet_get_vmx_pin_based_exec_ctrl,
+        .get_cpu_exec_ctrl = osnet_get_vmx_cpu_exec_ctrl,
+        .get_secondary_exec_ctrl = osnet_get_vmx_secondary_exec_ctrl,
+        .vmcs_read32 = vmcs_read32,
+        .vmcs_write32 = vmcs_write32,
+        .dump_vmcs = dump_vmcs,
+#endif
+
+#if OSNET_CONFIGURE_MSR_BITMAP
+        .disable_intercept_msr_x2apic = vmx_disable_intercept_msr_x2apic,
+        .enable_intercept_msr_x2apic = osnet_vmx_enable_intercept_msr_x2apic,
+#endif
 };
 
 static int __init vmx_init(void)

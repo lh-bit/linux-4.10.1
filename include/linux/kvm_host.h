@@ -35,6 +35,10 @@
 
 #include <asm/kvm_host.h>
 
+/* OSNET */
+#include <asm/osnet.h>
+/* OSNET-END */
+
 #ifndef KVM_MAX_VCPU_ID
 #define KVM_MAX_VCPU_ID KVM_MAX_VCPUS
 #endif
@@ -430,6 +434,9 @@ struct kvm {
 	struct list_head devices;
 	struct dentry *debugfs_dentry;
 	struct kvm_stat_data **debugfs_stat_data;
+#if OSNET_DTID_PI_DESC
+        struct osnet_pi_desc osnet_pid;
+#endif
 };
 
 #define kvm_err(fmt, ...) \

@@ -35,6 +35,15 @@
 #include <asm/asm.h>
 #include <asm/kvm_page_track.h>
 
+/* OSNET */
+#include <asm/osnet.h>
+
+#if OSNET_DTID_HYPERCALL_MAP_PID
+unsigned long osnet_find_spte(struct kvm_vcpu *vcpu, gfn_t gfn);
+bool osnet_spt_walk(struct kvm_vcpu *vcpu, gfn_t gfn);
+#endif
+/* OSNET-END*/
+
 #define KVM_MAX_VCPUS 288
 #define KVM_SOFT_MAX_VCPUS 240
 #define KVM_MAX_VCPU_ID 1023
@@ -1030,6 +1039,21 @@ struct kvm_x86_ops {
 	void (*cancel_hv_timer)(struct kvm_vcpu *vcpu);
 
 	void (*setup_mce)(struct kvm_vcpu *vcpu);
+#if OSNET_CONFIGURE_VMCS
+        u32 (*get_pin_based_exec_ctrl)(struct kvm_vcpu *vcpu);
+        u32 (*get_cpu_exec_ctrl)(struct kvm_vcpu *vcpu);
+        u32 (*get_secondary_exec_ctrl)(struct kvm_vcpu *vcpu);
+        u32 (*vmcs_read32)(unsigned long field);
+        void (*vmcs_write32)(unsigned long field, u32 value);
+        void (*dump_vmcs)(void);
+#endif
+
+#if OSNET_CONFIGURE_MSR_BITMAP
+        void (*disable_intercept_msr_x2apic)(u32 msr, int type,
+                                             bool apicv_active);
+        void (*enable_intercept_msr_x2apic)(u32 msr, int type,
+                                            bool apicv_active);
+#endif
 };
 
 struct kvm_arch_async_pf {

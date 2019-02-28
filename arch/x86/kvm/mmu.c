@@ -44,6 +44,10 @@
 #include <asm/vmx.h>
 #include <asm/kvm_page_track.h>
 
+/* OSNET */
+#include <asm/osnet.h>
+/* OSNET-END */
+
 /*
  * When setting this variable to true it enables Two-Dimensional-Paging
  * where the hardware walks 2 page tables:
@@ -2589,6 +2593,50 @@ set_pte:
 done:
 	return ret;
 }
+
+#if OSNET_DTID_HYPERCALL_MAP_PID
+unsigned long osnet_find_spte(struct kvm_vcpu *vcpu, gfn_t gfn)
+{
+        struct kvm_shadow_walk_iterator iterator;
+
+        for_each_shadow_entry(vcpu, (u64)gfn << PAGE_SHIFT, iterator) {
+                u64 *sptep = iterator.sptep;
+                if (is_shadow_present_pte(*sptep)) {
+                        kvm_pfn_t pfn = gfn_to_pfn(vcpu->kvm, gfn);
+                        if (pfn == spte_to_pfn(*sptep))
+                                return (unsigned long) sptep;
+                }
+        }
+
+        return 0;
+}
+EXPORT_SYMBOL_GPL(osnet_find_spte);
+
+bool osnet_spt_walk(struct kvm_vcpu *vcpu, gfn_t gfn)
+{
+        kvm_pfn_t pfn = gfn_to_pfn(vcpu->kvm, gfn);
+        struct kvm_shadow_walk_iterator iterator;
+
+        /*
+         * pfn is retrieved based on the kvm_memslot and HVA.
+         * HVA is updated with the new pfn.
+         */
+        pr_info("gpa\tpfn\t*spte\tspte_to_pfn(*spte)\n");
+        for_each_shadow_entry(vcpu, (u64)gfn << PAGE_SHIFT, iterator) {
+                u64 *sptep = iterator.sptep;
+                u64 gaddr = iterator.addr;
+                if (is_shadow_present_pte(*sptep)) {
+                        pr_info("0x%llx\t0x%llx\t0x%llx\t0x%llx\n",
+                                        gaddr, pfn, *sptep, spte_to_pfn(*sptep));
+                        if (pfn == spte_to_pfn(*sptep))
+                                return true;
+                }
+        }
+
+        return false;
+}
+EXPORT_SYMBOL_GPL(osnet_spt_walk);
+#endif
 
 static bool mmu_set_spte(struct kvm_vcpu *vcpu, u64 *sptep, unsigned pte_access,
 			 int write_fault, int level, gfn_t gfn, kvm_pfn_t pfn,

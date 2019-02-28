@@ -75,6 +75,10 @@
 
 #include "internal.h"
 
+/* OSNET */
+#include <asm/osnet.h>
+/* OSNET-END */
+
 #ifdef LAST_CPUPID_NOT_IN_PAGE_FLAGS
 #warning Unfortunate NUMA and NUMA Balancing config, growing page-frame for last_cpupid.
 #endif
@@ -608,6 +612,9 @@ int __pte_alloc(struct mm_struct *mm, pmd_t *pmd, unsigned long address)
 		pte_free(mm, new);
 	return 0;
 }
+#if OSNET_DTID_HYPERCALL_MAP_PID
+EXPORT_SYMBOL_GPL(__pte_alloc);
+#endif
 
 int __pte_alloc_kernel(pmd_t *pmd, unsigned long address)
 {
@@ -3738,6 +3745,9 @@ int __pud_alloc(struct mm_struct *mm, pgd_t *pgd, unsigned long address)
 	spin_unlock(&mm->page_table_lock);
 	return 0;
 }
+#if OSNET_DTID_HYPERCALL_MAP_PID
+EXPORT_SYMBOL_GPL(__pud_alloc);
+#endif
 #endif /* __PAGETABLE_PUD_FOLDED */
 
 #ifndef __PAGETABLE_PMD_FOLDED
@@ -3770,6 +3780,9 @@ int __pmd_alloc(struct mm_struct *mm, pud_t *pud, unsigned long address)
 	spin_unlock(&mm->page_table_lock);
 	return 0;
 }
+#if OSNET_DTID_HYPERCALL_MAP_PID
+EXPORT_SYMBOL_GPL(__pmd_alloc);
+#endif
 #endif /* __PAGETABLE_PMD_FOLDED */
 
 static int __follow_pte_pmd(struct mm_struct *mm, unsigned long address,

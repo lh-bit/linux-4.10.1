@@ -63,6 +63,10 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/kvm.h>
 
+/* OSNET */
+#include <asm/osnet.h>
+/* OSNET-END */
+
 /* Worst case buffer size needed for holding an integer. */
 #define ITOA_MAX_LEN 12
 
@@ -737,6 +741,13 @@ static void kvm_destroy_vm(struct kvm *kvm)
 		kvm_free_memslots(kvm, kvm->memslots[i]);
 	cleanup_srcu_struct(&kvm->irq_srcu);
 	cleanup_srcu_struct(&kvm->srcu);
+#if OSNET_DTID_PI_DESC
+        for (i = 0; i < kvm->osnet_pid.size; i++) {
+                struct osnet_pid_pte *entry;
+                entry = &kvm->osnet_pid.pid_pte[i];
+                free_page(entry->pid);
+        }
+#endif
 	kvm_arch_free_vm(kvm);
 	preempt_notifier_dec();
 	hardware_disable_all();
