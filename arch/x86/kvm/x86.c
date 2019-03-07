@@ -6117,9 +6117,10 @@ void kvm_vcpu_deactivate_apicv(struct kvm_vcpu *vcpu)
 
 #if OSNET_DTID_HYPERCALL_MAP_PID
 #include <asm/pgtable.h>
+#include <asm/pgalloc.h>
 #include <linux/mm.h>
 #include <linux/page-flags.h>
-#include <asm/pgalloc.h>
+#include <linux/kallsyms.h>
 
 static struct osnet_pid_pte *osnet_get_pid_pte(struct kvm_vcpu *vcpu)
 {
@@ -6355,6 +6356,19 @@ static void osnet_map_pid_spte(struct kvm_vcpu *vcpu)
         *(u64 *)gfn_spte = new_entry;
 }
 
+static void osnet_flush_tlb_page(struct kvm_vcpu *vcpu, unsigned long gpa)
+{
+        gfn_t gfn = gpa_to_gfn(gpa);
+        hva_t hva = gfn_to_hva(vcpu->kvm, gfn);
+        struct vm_area_struct *vma = osnet_find_vma(current->mm, hva);
+        typedef void (*func_t)(struct vm_area_struct *vma,
+                               unsigned long address);
+
+        func_t flush_tlb_page =
+                (func_t) kallsyms_lookup_name("flush_tlb_page");
+        flush_tlb_page(vma, hva);
+}
+
 static int hypercall_map_pid(struct kvm_vcpu *vcpu, unsigned long gpa)
 {
         int offset;
@@ -6579,6 +6593,7 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 #if OSNET_SETUP_DID
         case KVM_HC_SETUP_DID:
                 ret = hypercall_map_pid(vcpu, a0);
+                osnet_flush_tlb_page(vcpu, a0);
                 pr_info("vcpu(%d) maps pid(%d)\n", vcpu->vcpu_id, current->pid);
 
                 osnet_set_cpu_exec_ctrl(vcpu, false);
@@ -6588,6 +6603,7 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
                 break;
         case KVM_HC_RESTORE_DID:
                 ret = hypercall_unmap_pid(vcpu, a0);
+                osnet_flush_tlb_page(vcpu, a0);
                 pr_info("vcpu(%d) unmaps pid(%d)\n", vcpu->vcpu_id,
                                                      current->pid);
 
@@ -6600,10 +6616,12 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 #if OSNET_DTID_HYPERCALL_MAP_PID
         case KVM_HC_MAP_PID:
                 ret = hypercall_map_pid(vcpu, a0);
+                osnet_flush_tlb_page(vcpu, a0);
                 pr_info("vcpu(%d) maps pid(%d)\n", vcpu->vcpu_id, current->pid);
                 break;
         case KVM_HC_UNMAP_PID:
                 ret = hypercall_unmap_pid(vcpu, a0);
+                osnet_flush_tlb_page(vcpu, a0);
                 pr_info("vcpu(%d) unmaps pid(%d)\n", vcpu->vcpu_id,
                                                      current->pid);
                 break;
