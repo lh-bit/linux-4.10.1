@@ -33,6 +33,9 @@ struct osnet_pi_desc {
 };
 #endif
 
+/* set the X2APIC ID */
+#define OSNET_SET_X2APIC_ID 1
+
 /* setup DID */
 #define OSNET_SETUP_DID OSNET_CONFIGURE_VMCS && \
                         OSNET_CONFIGURE_MSR_BITMAP && \

@@ -6364,8 +6364,7 @@ static void osnet_flush_tlb_page(struct kvm_vcpu *vcpu, unsigned long gpa)
         typedef void (*func_t)(struct vm_area_struct *vma,
                                unsigned long address);
 
-        func_t flush_tlb_page =
-                (func_t) kallsyms_lookup_name("flush_tlb_page");
+        func_t flush_tlb_page = (func_t) kallsyms_lookup_name("flush_tlb_page");
         flush_tlb_page(vma, hva);
 }
 
@@ -6532,6 +6531,30 @@ static void osnet_set_timer_msr_bitmap(struct kvm_vcpu *vcpu, bool enable)
         }
 }
 
+static void osnet_set_icr_msr_bitmap(struct kvm_vcpu *vcpu, bool enable)
+{
+        u32 msr;
+        bool apicv_active = vcpu->arch.apic && vcpu->arch.apicv_active;
+
+        if (enable) {
+                msr = APIC_BASE_MSR + (APIC_ICR >> 4);
+                kvm_x86_ops->enable_intercept_msr_x2apic(msr, OSNET_MSR_TYPE_W,
+                                                         apicv_active);
+
+                //msr = APIC_BASE_MSR + (APIC_ICR2 >> 4);
+                //kvm_x86_ops->enable_intercept_msr_x2apic(msr, OSNET_MSR_TYPE_W,
+                //                                         apicv_active);
+        } else {
+                msr = APIC_BASE_MSR + (APIC_ICR >> 4);
+                kvm_x86_ops->disable_intercept_msr_x2apic(msr, OSNET_MSR_TYPE_W,
+                                                          apicv_active);
+
+                //msr = APIC_BASE_MSR + (APIC_ICR2 >> 4);
+                //kvm_x86_ops->disable_intercept_msr_x2apic(msr, OSNET_MSR_TYPE_W,
+                //                                         apicv_active);
+        }
+}
+
 static void osnet_set_lapic(bool oneshot, bool timer_vector, u32 val)
 {
         if (oneshot) {
@@ -6547,6 +6570,58 @@ static void osnet_set_lapic(bool oneshot, bool timer_vector, u32 val)
         }
 
         apic_write(APIC_TMICT, val);
+}
+
+static void osnet_setup_x2apic_id(struct kvm_vcpu *vcpu)
+{
+        int cpu;
+        int apicid;
+
+        cpu = smp_processor_id();
+        apicid = per_cpu(x86_cpu_to_apicid, cpu);
+        osnet_kvm_apic_set_x2apic_id(vcpu->arch.apic, apicid);
+
+        pr_info("vcpu(%d) x2apic id: 0x%x\n", vcpu->vcpu_id, apicid);
+}
+
+static void osnet_restore_x2apic_id(struct kvm_vcpu *vcpu)
+{
+        int apicid;
+
+        apicid = per_cpu(x86_cpu_to_apicid, vcpu->vcpu_id);
+        osnet_kvm_apic_set_x2apic_id(vcpu->arch.apic, apicid);
+
+        pr_info("vcpu(%d) x2apic id: 0x%x\n", vcpu->vcpu_id, apicid);
+}
+
+static unsigned long osnet_setup_dtid(struct kvm_vcpu *vcpu, unsigned long gpa)
+{
+        unsigned long ret;
+
+        ret = hypercall_map_pid(vcpu, gpa);
+        osnet_flush_tlb_page(vcpu, gpa);
+        pr_info("vcpu(%d) maps pid(%d)\n", vcpu->vcpu_id, current->pid);
+
+        osnet_set_cpu_exec_ctrl(vcpu, false);
+        osnet_set_timer_msr_bitmap(vcpu, false);
+        osnet_set_lapic(false, false, 0x616d);
+
+        return ret;
+}
+
+static unsigned long osnet_restore_dtid(struct kvm_vcpu *vcpu, unsigned long gpa)
+{
+        unsigned long ret;
+
+        ret = hypercall_unmap_pid(vcpu, gpa);
+        osnet_flush_tlb_page(vcpu, gpa);
+        pr_info("vcpu(%d) unmaps pid(%d)\n", vcpu->vcpu_id, current->pid);
+
+        osnet_set_cpu_exec_ctrl(vcpu, true);
+        osnet_set_timer_msr_bitmap(vcpu, true);
+        osnet_set_lapic(true, true, 0x616d);
+
+        return ret;
 }
 #endif
 
@@ -6590,27 +6665,32 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 		kvm_pv_kick_cpu_op(vcpu->kvm, a0, a1);
 		ret = 0;
                 break;
-#if OSNET_SETUP_DID
-        case KVM_HC_SETUP_DID:
-                ret = hypercall_map_pid(vcpu, a0);
-                osnet_flush_tlb_page(vcpu, a0);
-                pr_info("vcpu(%d) maps pid(%d)\n", vcpu->vcpu_id, current->pid);
-
-                osnet_set_cpu_exec_ctrl(vcpu, false);
-                osnet_set_timer_msr_bitmap(vcpu, false);
-                osnet_set_lapic(false, false, 0x616d);
-
+#if OSNET_SET_X2APIC_ID
+        case KVM_HC_SET_X2APIC_ID:
+                osnet_setup_x2apic_id(vcpu);
+                ret = 0;
                 break;
-        case KVM_HC_RESTORE_DID:
-                ret = hypercall_unmap_pid(vcpu, a0);
-                osnet_flush_tlb_page(vcpu, a0);
-                pr_info("vcpu(%d) unmaps pid(%d)\n", vcpu->vcpu_id,
-                                                     current->pid);
-
-                osnet_set_cpu_exec_ctrl(vcpu, true);
-                osnet_set_timer_msr_bitmap(vcpu, true);
-                osnet_set_lapic(true, true, 0x616d);
-
+        case KVM_HC_RESTORE_X2APIC_ID:
+                osnet_restore_x2apic_id(vcpu);
+                ret = 0;
+                break;
+        case KVM_HC_DISABLE_INTERCEPT_WRMSR_ICR:
+                osnet_set_icr_msr_bitmap(vcpu, false);
+                pr_info("disable intercept wrmsr icr\n");
+                ret = 0;
+                break;
+        case KVM_HC_ENABLE_INTERCEPT_WRMSR_ICR:
+                osnet_set_icr_msr_bitmap(vcpu, true);
+                pr_info("enable intercept wrmsr icr\n");
+                ret = 0;
+                break;
+#endif
+#if OSNET_SETUP_DID
+        case KVM_HC_SETUP_DTID:
+                ret = osnet_setup_dtid(vcpu, a0);
+                break;
+        case KVM_HC_RESTORE_DTID:
+                ret = osnet_restore_dtid(vcpu, a0);
                 break;
 #endif
 #if OSNET_DTID_HYPERCALL_MAP_PID

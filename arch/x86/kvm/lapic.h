@@ -5,6 +5,13 @@
 
 #include <linux/kvm_host.h>
 
+/* OSNET */
+#include <asm/osnet.h>
+#if OSNET_SET_X2APIC_ID
+void osnet_kvm_apic_set_x2apic_id(struct kvm_lapic *apic, u32 id);
+#endif
+/* OSNET-END */
+
 #define KVM_APIC_INIT		0
 #define KVM_APIC_SIPI		1
 #define KVM_APIC_LVT_NUM	6

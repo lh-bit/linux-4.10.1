@@ -43,6 +43,10 @@
 #include "cpuid.h"
 #include "hyperv.h"
 
+/* OSNET */
+#include <asm/osnet.h>
+/* OSNET-END */
+
 #ifndef CONFIG_X86_64
 #define mod_64(x, y) ((x) - (y) * div64_u64(x, y))
 #else
@@ -254,6 +258,13 @@ static inline void kvm_apic_set_x2apic_id(struct kvm_lapic *apic, u32 id)
 	kvm_lapic_set_reg(apic, APIC_LDR, ldr);
 	recalculate_apic_map(apic->vcpu->kvm);
 }
+
+#if OSNET_SET_X2APIC_ID
+void osnet_kvm_apic_set_x2apic_id(struct kvm_lapic *apic, u32 id)
+{
+        kvm_apic_set_x2apic_id(apic, id);
+}
+#endif
 
 static inline int apic_lvt_enabled(struct kvm_lapic *apic, int lvt_type)
 {
