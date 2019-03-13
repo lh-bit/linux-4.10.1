@@ -6520,6 +6520,9 @@ static void osnet_set_timer_msr_bitmap(struct kvm_vcpu *vcpu, bool enable)
                 msr = APIC_BASE_MSR + (APIC_TMCCT >> 4);
                 kvm_x86_ops->enable_intercept_msr_x2apic(msr, OSNET_MSR_TYPE_R,
                                                          apicv_active);
+                msr = APIC_BASE_MSR + (APIC_TDCR >> 4);
+                kvm_x86_ops->enable_intercept_msr_x2apic(msr, OSNET_MSR_TYPE_W,
+                                                         apicv_active);
         } else {
                 msr = APIC_BASE_MSR + (APIC_TMICT >> 4);
                 kvm_x86_ops->disable_intercept_msr_x2apic(msr, OSNET_MSR_TYPE_W,
@@ -6527,6 +6530,9 @@ static void osnet_set_timer_msr_bitmap(struct kvm_vcpu *vcpu, bool enable)
 
                 msr = APIC_BASE_MSR + (APIC_TMCCT >> 4);
                 kvm_x86_ops->disable_intercept_msr_x2apic(msr, OSNET_MSR_TYPE_R,
+                                                          apicv_active);
+                msr = APIC_BASE_MSR + (APIC_TDCR >> 4);
+                kvm_x86_ops->disable_intercept_msr_x2apic(msr, OSNET_MSR_TYPE_W,
                                                           apicv_active);
         }
 }
