@@ -6491,6 +6491,8 @@ static bool hypercall_page_walk(struct kvm_vcpu *vcpu, unsigned long gpa)
 
 #if OSNET_SETUP_DID
 #include <asm/vmx.h>
+#include <linux/clockchips.h>
+
 #define OSNET_MSR_TYPE_R 1
 #define OSNET_MSR_TYPE_W 2
 
@@ -6629,6 +6631,27 @@ static unsigned long osnet_restore_dtid(struct kvm_vcpu *vcpu, unsigned long gpa
 
         return ret;
 }
+
+static unsigned long osnet_get_clockevent_factor(const char *query)
+{
+        unsigned long ret;
+        unsigned long clock_events;
+        struct clock_event_device *lapic_events;
+        struct clock_event_device *evt;
+
+        clock_events = kallsyms_lookup_name("lapic_events");
+        lapic_events = (struct clock_event_device *)clock_events;
+        evt = this_cpu_ptr(lapic_events);
+
+        if (strcmp(query, "mult") == 0)
+                ret = evt->mult;
+        else if (strcmp(query, "shift") == 0)
+                ret = evt->shift;
+        else
+                ret = 0;
+
+        return ret;
+}
 #endif
 
 int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
@@ -6671,6 +6694,14 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 		kvm_pv_kick_cpu_op(vcpu->kvm, a0, a1);
 		ret = 0;
                 break;
+#if OSNET_GET_CLOCKEVENT_FACTOR
+	case KVM_GET_CLOCKEVENT_MULT:
+		ret = osnet_get_clockevent_factor("mult");
+                break;
+	case KVM_GET_CLOCKEVENT_SHIFT:
+		ret = osnet_get_clockevent_factor("shift");
+                break;
+#endif
 #if OSNET_SET_X2APIC_ID
         case KVM_HC_SET_X2APIC_ID:
                 osnet_setup_x2apic_id(vcpu);

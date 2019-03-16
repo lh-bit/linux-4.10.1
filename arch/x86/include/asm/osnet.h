@@ -36,10 +36,14 @@ struct osnet_pi_desc {
 /* set the X2APIC ID */
 #define OSNET_SET_X2APIC_ID 1
 
+/* clockevent device */
+#define OSNET_GET_CLOCKEVENT_FACTOR 1
+
 /* setup DID */
 #define OSNET_SETUP_DID OSNET_CONFIGURE_VMCS && \
                         OSNET_CONFIGURE_MSR_BITMAP && \
                         OSNET_DTID_HYPERCALL_MAP_PID && \
+                        OSNET_GET_CLOCKEVENT_FACTOR && \
                         OSNET_DTID_PI_DESC
 
 #endif  /* _ASM_X86_OSNET_H */

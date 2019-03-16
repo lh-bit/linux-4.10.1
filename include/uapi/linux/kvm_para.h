@@ -30,25 +30,20 @@
 #include <asm/kvm_para.h>
 
 /* OSNET-DTID */
-#include <asm/osnet.h>
-
-#if OSNET_SETUP_DID
 #define KVM_HC_SETUP_DTID        100
 #define KVM_HC_RESTORE_DTID      101
-#endif
 
-#if OSNET_DTID_HYPERCALL_MAP_PID
 #define KVM_HC_MAP_PID          200
 #define KVM_HC_UNMAP_PID        201
 #define KVM_HC_PAGE_WALK        202
-#endif
 
-#if OSNET_SET_X2APIC_ID
 #define KVM_HC_SET_X2APIC_ID                    300
 #define KVM_HC_RESTORE_X2APIC_ID                301
 #define KVM_HC_DISABLE_INTERCEPT_WRMSR_ICR      302
 #define KVM_HC_ENABLE_INTERCEPT_WRMSR_ICR       303
-#endif
+
+#define KVM_GET_CLOCKEVENT_MULT         400
+#define KVM_GET_CLOCKEVENT_SHIFT        401
 /* OSNET-END */
 
 #endif /* _UAPI__LINUX_KVM_PARA_H */
