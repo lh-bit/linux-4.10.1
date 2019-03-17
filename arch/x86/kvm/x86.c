@@ -6489,6 +6489,30 @@ static bool hypercall_page_walk(struct kvm_vcpu *vcpu, unsigned long gpa)
 }
 #endif
 
+#if OSNET_SET_X2APIC_ID
+static void osnet_setup_x2apic_id(struct kvm_vcpu *vcpu)
+{
+        int cpu;
+        int apicid;
+
+        cpu = smp_processor_id();
+        apicid = per_cpu(x86_cpu_to_apicid, cpu);
+        osnet_kvm_apic_set_x2apic_id(vcpu->arch.apic, apicid);
+
+        pr_info("vcpu(%d) x2apic id: 0x%x\n", vcpu->vcpu_id, apicid);
+}
+
+static void osnet_restore_x2apic_id(struct kvm_vcpu *vcpu)
+{
+        int apicid;
+
+        apicid = per_cpu(x86_cpu_to_apicid, vcpu->vcpu_id);
+        osnet_kvm_apic_set_x2apic_id(vcpu->arch.apic, apicid);
+
+        pr_info("vcpu(%d) x2apic id: 0x%x\n", vcpu->vcpu_id, apicid);
+}
+#endif
+
 #if OSNET_SETUP_DID
 #include <asm/vmx.h>
 #include <linux/clockchips.h>
@@ -6578,28 +6602,6 @@ static void osnet_set_lapic(bool oneshot, bool timer_vector, u32 val)
         }
 
         apic_write(APIC_TMICT, val);
-}
-
-static void osnet_setup_x2apic_id(struct kvm_vcpu *vcpu)
-{
-        int cpu;
-        int apicid;
-
-        cpu = smp_processor_id();
-        apicid = per_cpu(x86_cpu_to_apicid, cpu);
-        osnet_kvm_apic_set_x2apic_id(vcpu->arch.apic, apicid);
-
-        pr_info("vcpu(%d) x2apic id: 0x%x\n", vcpu->vcpu_id, apicid);
-}
-
-static void osnet_restore_x2apic_id(struct kvm_vcpu *vcpu)
-{
-        int apicid;
-
-        apicid = per_cpu(x86_cpu_to_apicid, vcpu->vcpu_id);
-        osnet_kvm_apic_set_x2apic_id(vcpu->arch.apic, apicid);
-
-        pr_info("vcpu(%d) x2apic id: 0x%x\n", vcpu->vcpu_id, apicid);
 }
 
 static unsigned long osnet_setup_dtid(struct kvm_vcpu *vcpu, unsigned long gpa)
@@ -6695,14 +6697,15 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 		ret = 0;
                 break;
 #if OSNET_GET_CLOCKEVENT_FACTOR
-	case KVM_GET_CLOCKEVENT_MULT:
+	case KVM_HC_GET_CLOCKEVENT_MULT:
 		ret = osnet_get_clockevent_factor("mult");
                 break;
-	case KVM_GET_CLOCKEVENT_SHIFT:
+	case KVM_HC_GET_CLOCKEVENT_SHIFT:
 		ret = osnet_get_clockevent_factor("shift");
                 break;
 #endif
 #if OSNET_SET_X2APIC_ID
+        /* TODO: remove */
         case KVM_HC_SET_X2APIC_ID:
                 osnet_setup_x2apic_id(vcpu);
                 ret = 0;
@@ -6711,6 +6714,18 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
                 osnet_restore_x2apic_id(vcpu);
                 ret = 0;
                 break;
+#endif
+#if OSNET_CONFIGURE_VMCS
+        case KVM_HC_SET_CPU_EXEC_VMCS:
+                osnet_set_cpu_exec_ctrl(vcpu, false);
+                ret = 0;
+                break;
+        case KVM_HC_RESTORE_CPU_EXEC_VMCS:
+                osnet_set_cpu_exec_ctrl(vcpu, true);
+                ret = 0;
+                break;
+#endif
+#if OSNET_CONFIGURE_MSR_BITMAP
         case KVM_HC_DISABLE_INTERCEPT_WRMSR_ICR:
                 osnet_set_icr_msr_bitmap(vcpu, false);
                 pr_info("disable intercept wrmsr icr\n");

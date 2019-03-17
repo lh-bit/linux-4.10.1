@@ -32,18 +32,17 @@
 /* OSNET-DTID */
 #define KVM_HC_SETUP_DTID        100
 #define KVM_HC_RESTORE_DTID      101
-
 #define KVM_HC_MAP_PID          200
 #define KVM_HC_UNMAP_PID        201
 #define KVM_HC_PAGE_WALK        202
-
 #define KVM_HC_SET_X2APIC_ID                    300
 #define KVM_HC_RESTORE_X2APIC_ID                301
 #define KVM_HC_DISABLE_INTERCEPT_WRMSR_ICR      302
 #define KVM_HC_ENABLE_INTERCEPT_WRMSR_ICR       303
-
-#define KVM_GET_CLOCKEVENT_MULT         400
-#define KVM_GET_CLOCKEVENT_SHIFT        401
+#define KVM_HC_SET_CPU_EXEC_VMCS                304
+#define KVM_HC_RESTORE_CPU_EXEC_VMCS            305
+#define KVM_HC_GET_CLOCKEVENT_MULT         400
+#define KVM_HC_GET_CLOCKEVENT_SHIFT        401
 /* OSNET-END */
 
 #endif /* _UAPI__LINUX_KVM_PARA_H */
